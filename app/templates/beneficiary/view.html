@@ -73,7 +73,7 @@
   <div class="card">
     <div class="card-header"><h3>Distribution History</h3></div>
     <div class="card-body">
-      {% set records = beneficiary.distribution_records.order_by('created_at desc').limit(10).all() %}
+      {% set records = dist_records %}
       {% if records %}
         <table class="table table-sm">
           <thead><tr><th>Batch</th><th>Item</th><th>Qty</th><th>Date</th><th>Status</th></tr></thead>

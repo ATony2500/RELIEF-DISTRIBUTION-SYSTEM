@@ -186,10 +186,18 @@ def register():
 @beneficiary_bp.route("/<int:beneficiary_id>")
 @login_required
 def view(beneficiary_id):
+    from app.models.distribution import DistributionRecord
     b = db.session.get(Beneficiary, beneficiary_id)
     if not b:
         abort(404)
-    return render_template("beneficiary/view.html", beneficiary=b)
+    dist_records = (
+        DistributionRecord.query
+        .filter_by(beneficiary_id=b.id)
+        .order_by(DistributionRecord.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    return render_template("beneficiary/view.html", beneficiary=b, dist_records=dist_records)
 
 
 # ---------------------------------------------------------------------------
