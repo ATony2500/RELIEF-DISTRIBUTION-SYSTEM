@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Distributions{% endblock %}
+{% block page_title %}Distribution Batches{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Distribution Batches</h2>
+  <a href="{{ url_for('distribution.create_batch') }}" class="btn btn-primary">➕ New Batch</a>
+</div>
+
+<div class="filter-tabs mb-3">
+  <a href="{{ url_for('distribution.batch_list') }}" class="filter-tab {% if not status %}active{% endif %}">All</a>
+  <a href="{{ url_for('distribution.batch_list', status='planned') }}" class="filter-tab {% if status == 'planned' %}active{% endif %}">Planned</a>
+  <a href="{{ url_for('distribution.batch_list', status='in_progress') }}" class="filter-tab {% if status == 'in_progress' %}active{% endif %}">In Progress</a>
+  <a href="{{ url_for('distribution.batch_list', status='completed') }}" class="filter-tab {% if status == 'completed' %}active{% endif %}">Completed</a>
+  <a href="{{ url_for('distribution.batch_list', status='cancelled') }}" class="filter-tab {% if status == 'cancelled' %}active{% endif %}">Cancelled</a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Code</th><th>Title</th><th>Disaster Type</th><th>Warehouse</th>
+          <th>Planned Date</th><th>Records</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in batches.items %}
+        <tr>
+          <td><code>{{ batch.batch_code }}</code></td>
+          <td>{{ batch.title }}</td>
+          <td><span class="badge badge-info">{{ batch.disaster_type }}</span></td>
+          <td>{{ batch.source_warehouse.code }}</td>
+          <td>{{ batch.planned_date.strftime('%d %b %Y') }}</td>
+          <td>{{ batch.total_beneficiaries }}</td>
+          <td><span class="badge badge-{{ batch.status }}">{{ batch.status | replace('_',' ') | title }}</span></td>
+          <td><a href="{{ url_for('distribution.batch_detail', batch_id=batch.id) }}" class="btn btn-sm btn-outline">View</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No batches found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if batches.pages > 1 %}
+<div class="pagination mt-3">
+  {% if batches.has_prev %}<a href="{{ url_for('distribution.batch_list', page=batches.prev_num, status=status) }}" class="btn btn-outline">← Prev</a>{% endif %}
+  <span class="page-info">Page {{ batches.page }} of {{ batches.pages }}</span>
+  {% if batches.has_next %}<a href="{{ url_for('distribution.batch_list', page=batches.next_num, status=status) }}" class="btn btn-outline">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

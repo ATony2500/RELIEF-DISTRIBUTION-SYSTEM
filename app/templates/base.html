@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}NRDS{% endblock %} — National Relief Distribution System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  {% block extra_css %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+{% if current_user.is_authenticated %}
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🛡️</span>
+      <div>
+        <div class="logo-title">NRDS</div>
+        <div class="logo-sub">Relief Distribution System</div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a href="{{ url_for('main.dashboard') }}" class="nav-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+      <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+    </a>
+
+    <div class="nav-section-label">BENEFICIARIES</div>
+    <a href="{{ url_for('beneficiary.list_beneficiaries') }}" class="nav-item {% if request.endpoint and 'beneficiary' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">👥</span><span class="nav-label">Beneficiaries</span>
+    </a>
+    <a href="{{ url_for('beneficiary.register') }}" class="nav-item">
+      <span class="nav-icon">➕</span><span class="nav-label">Register New</span>
+    </a>
+
+    <div class="nav-section-label">INVENTORY</div>
+    <a href="{{ url_for('inventory.warehouses') }}" class="nav-item {% if request.endpoint and 'inventory' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🏭</span><span class="nav-label">Warehouses</span>
+    </a>
+    <a href="{{ url_for('inventory.item_list') }}" class="nav-item">
+      <span class="nav-icon">📦</span><span class="nav-label">Inventory Items</span>
+    </a>
+
+    <div class="nav-section-label">DISTRIBUTION</div>
+    <a href="{{ url_for('distribution.batch_list') }}" class="nav-item {% if request.endpoint and 'distribution' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">🚛</span><span class="nav-label">Distributions</span>
+    </a>
+    <a href="{{ url_for('distribution.create_batch') }}" class="nav-item">
+      <span class="nav-icon">📋</span><span class="nav-label">New Batch</span>
+    </a>
+
+    <div class="nav-section-label">REPORTS</div>
+    <a href="{{ url_for('reports.index') }}" class="nav-item {% if request.endpoint and 'reports' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">📈</span><span class="nav-label">Reports</span>
+    </a>
+
+    {% if current_user.is_admin %}
+    <div class="nav-section-label">ADMINISTRATION</div>
+    <a href="{{ url_for('admin.user_list') }}" class="nav-item {% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}">
+      <span class="nav-icon">⚙️</span><span class="nav-label">User Management</span>
+    </a>
+    <a href="{{ url_for('admin.audit_log_view') }}" class="nav-item">
+      <span class="nav-icon">📜</span><span class="nav-label">Audit Log</span>
+    </a>
+    <a href="{{ url_for('admin.distribution_points') }}" class="nav-item">
+      <span class="nav-icon">📍</span><span class="nav-label">Distribution Points</span>
+    </a>
+    {% endif %}
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar">{{ current_user.full_name[0] | upper }}</div>
+      <div>
+        <div class="user-name">{{ current_user.full_name }}</div>
+        <div class="user-role">{{ current_user.role | replace('_', ' ') | title }}</div>
+      </div>
+    </div>
+    <a href="{{ url_for('auth.logout') }}" class="btn-logout" title="Logout">⏏</a>
+  </div>
+</aside>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div class="main-wrapper">
+  <header class="topbar">
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">☰</button>
+    <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+    <div class="topbar-right">
+      <a href="{{ url_for('auth.profile') }}" class="topbar-user">
+        <span class="avatar-small">{{ current_user.full_name[0] | upper }}</span>
+        {{ current_user.username }}
+      </a>
+    </div>
+  </header>
+
+  <main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+              <span>{{ message }}</span>
+              <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+{% else %}
+{# Unauthenticated pages use auth_base.html — this branch is only
+   reached by error pages shown to logged-out users. #}
+<div style="padding:3rem; text-align:center;">
+  {% block unauth_content %}{% endblock %}
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Inventory Report{% endblock %}
+{% block page_title %}Inventory Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Inventory Report</h2>
+  <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" class="filter-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Warehouse</label>
+          <select name="warehouse_id" class="form-control">
+            <option value="">All Warehouses</option>
+            {% for wh in warehouses %}
+              <option value="{{ wh.id }}" {% if selected_wh_id == wh.id %}selected{% endif %}>{{ wh.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group align-end">
+          <button type="submit" class="btn btn-primary">Filter</button>
+          <a href="{{ url_for('reports.inventory_report') }}" class="btn btn-outline">Clear</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if low_stock %}
+<div class="alert alert-warning">
+  ⚠ <strong>{{ low_stock | length }} item(s)</strong> are below their minimum threshold.
+</div>
+{% endif %}
+
+{% for category, cat_items in by_category.items() %}
+<div class="card mb-3">
+  <div class="card-header"><h3>{{ category }}</h3></div>
+  <div class="card-body p-0">
+    <table class="table">
+      <thead><tr><th>Item</th><th>Warehouse</th><th>Available</th><th>Threshold</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for item in cat_items %}
+        <tr>
+          <td>{{ item.item_name }}</td>
+          <td>{{ item.warehouse.code }}</td>
+          <td class="{% if item.is_low_stock %}text-danger{% endif %}">{{ item.quantity_available }} {{ item.unit }}</td>
+          <td>{{ item.minimum_threshold }} {{ item.unit }}</td>
+          <td>{% if item.is_low_stock %}<span class="badge badge-danger">Low Stock</span>{% else %}<span class="badge badge-success">OK</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

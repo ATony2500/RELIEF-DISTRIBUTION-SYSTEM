@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Distribution Report{% endblock %}
+{% block page_title %}Distribution Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Distribution Report</h2>
+  <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+</div>
+
+<div class="stats-grid mb-3">
+  <div class="stat-card stat-green">
+    <div class="stat-icon">✅</div>
+    <div class="stat-value">{{ overall_completed }}</div>
+    <div class="stat-label">Total Completed</div>
+  </div>
+  <div class="stat-card stat-blue">
+    <div class="stat-icon">📋</div>
+    <div class="stat-value">{{ overall_total }}</div>
+    <div class="stat-label">Total Records</div>
+  </div>
+  <div class="stat-card stat-teal">
+    <div class="stat-icon">📊</div>
+    <div class="stat-value">{{ "%.1f" | format(overall_completed / overall_total * 100 if overall_total else 0) }}%</div>
+    <div class="stat-label">Completion Rate</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>Batch Performance</h3></div>
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr><th>Code</th><th>Title</th><th>Type</th><th>Total</th><th>Completed</th><th>Rate</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for row in batch_stats %}
+        <tr>
+          <td><code>{{ row.batch.batch_code }}</code></td>
+          <td>{{ row.batch.title | truncate(40) }}</td>
+          <td><span class="badge badge-info">{{ row.batch.disaster_type }}</span></td>
+          <td>{{ row.total }}</td>
+          <td>{{ row.completed }}</td>
+          <td>
+            <div class="mini-bar">
+              <div class="mini-bar-fill" style="width:{{ row.rate }}%"></div>
+            </div>
+            <small>{{ row.rate }}%</small>
+          </td>
+          <td><span class="badge badge-{{ row.batch.status }}">{{ row.batch.status | replace('_',' ') | title }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No distribution batches yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

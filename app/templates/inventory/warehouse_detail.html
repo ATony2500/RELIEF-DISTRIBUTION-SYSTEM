@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ warehouse.name }}{% endblock %}
+{% block page_title %}Warehouse Detail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>{{ warehouse.name }} <span class="badge badge-info">{{ warehouse.code }}</span></h2>
+  <div>
+    <a href="{{ url_for('inventory.add_item') }}" class="btn btn-primary">➕ Add Item</a>
+    <a href="{{ url_for('inventory.warehouses') }}" class="btn btn-outline">← Back</a>
+  </div>
+</div>
+
+<div class="card-grid mb-3">
+  <div class="stat-card stat-blue">
+    <div class="stat-icon">📦</div>
+    <div class="stat-value">{{ items | length }}</div>
+    <div class="stat-label">Item Types</div>
+  </div>
+  <div class="stat-card {% if low_stock %}stat-red{% else %}stat-green{% endif %}">
+    <div class="stat-icon">⚠️</div>
+    <div class="stat-value">{{ low_stock | length }}</div>
+    <div class="stat-label">Low Stock Alerts</div>
+  </div>
+  <div class="stat-card stat-teal">
+    <div class="stat-icon">🏭</div>
+    <div class="stat-value">{{ warehouse.capacity_tonnes or '—' }}</div>
+    <div class="stat-label">Capacity (tonnes)</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3>Inventory Items</h3>
+    <div class="filter-tabs">
+      <a href="?" class="filter-tab active">All</a>
+      <a href="?category=Food" class="filter-tab">Food</a>
+      <a href="?category=Medicine" class="filter-tab">Medicine</a>
+      <a href="?category=Shelter" class="filter-tab">Shelter</a>
+      <a href="?category=Water" class="filter-tab">Water</a>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Item Name</th>
+          <th>Category</th>
+          <th>Available</th>
+          <th>Threshold</th>
+          <th>Stock Level</th>
+          <th>Expiry</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr class="{% if item.is_low_stock %}row-warning{% endif %}">
+          <td><strong>{{ item.item_name }}</strong>{% if item.donor %}<br><small class="text-muted">Donor: {{ item.donor }}</small>{% endif %}</td>
+          <td><span class="badge badge-category-{{ item.category | lower }}">{{ item.category }}</span></td>
+          <td>
+            <strong class="{% if item.is_low_stock %}text-danger{% endif %}">
+              {{ item.quantity_available }} {{ item.unit }}
+            </strong>
+          </td>
+          <td>{{ item.minimum_threshold }} {{ item.unit }}</td>
+          <td>
+            <div class="stock-bar">
+              <div class="stock-bar-fill {% if item.stock_percentage < 50 %}stock-low{% elif item.stock_percentage < 100 %}stock-medium{% else %}stock-ok{% endif %}"
+                   style="width: {{ [item.stock_percentage, 100] | min }}%"></div>
+            </div>
+            <small>{{ item.stock_percentage }}%</small>
+          </td>
+          <td class="{% if item.expiry_date %}text-warning{% endif %}">
+            {{ item.expiry_date.strftime('%b %Y') if item.expiry_date else '—' }}
+          </td>
+          <td>
+            <a href="{{ url_for('inventory.stock_movement', item_id=item.id) }}" class="btn btn-sm btn-outline">📦 Move</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No items in this warehouse.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

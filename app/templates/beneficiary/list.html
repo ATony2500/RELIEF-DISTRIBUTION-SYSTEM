@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Beneficiaries{% endblock %}
+{% block page_title %}Beneficiaries{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Beneficiary Registry</h2>
+  <a href="{{ url_for('beneficiary.register') }}" class="btn btn-primary">➕ Register New</a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" class="filter-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Search</label>
+          <input type="text" name="q" class="form-control" placeholder="Name, NIN, phone…" value="{{ search }}" />
+        </div>
+        <div class="form-group">
+          <label>State</label>
+          <select name="state_id" class="form-control">
+            <option value="">All States</option>
+            {% for state in states %}
+              <option value="{{ state.id }}" {% if state_id == state.id %}selected{% endif %}>{{ state.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" class="form-control">
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+            <option value="flagged" {% if status_filter == 'flagged' %}selected{% endif %}>Flagged</option>
+            <option value="duplicate" {% if status_filter == 'duplicate' %}selected{% endif %}>Duplicate</option>
+            <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+          </select>
+        </div>
+        <div class="form-group align-end">
+          <button type="submit" class="btn btn-primary">🔍 Search</button>
+          <a href="{{ url_for('beneficiary.list_beneficiaries') }}" class="btn btn-outline">Clear</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>NIN (Masked)</th>
+          <th>LGA</th>
+          <th>Gender</th>
+          <th>Verified</th>
+          <th>Status</th>
+          <th>Registered</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in beneficiaries.items %}
+        <tr>
+          <td>
+            <strong>{{ b.full_name }}</strong>
+            {% if b.is_elderly %}<span title="Elderly">👴</span>{% endif %}
+            {% if b.is_disabled %}<span title="Disabled">♿</span>{% endif %}
+            {% if b.is_pregnant %}<span title="Pregnant">🤰</span>{% endif %}
+          </td>
+          <td><code>{{ b.masked_nin }}</code></td>
+          <td>{{ b.lga.name if b.lga else '—' }}</td>
+          <td>{{ b.gender }}</td>
+          <td>
+            {% if b.nin_verified %}
+              <span class="badge badge-success">✓ Verified</span>
+            {% else %}
+              <span class="badge badge-warning">Unverified</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-{{ b.status }}">{{ b.status | title }}</span></td>
+          <td class="text-muted">{{ b.registered_at.strftime('%d %b %Y') }}</td>
+          <td>
+            <a href="{{ url_for('beneficiary.view', beneficiary_id=b.id) }}" class="btn btn-sm btn-outline">View</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">No beneficiaries found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Pagination -->
+{% if beneficiaries.pages > 1 %}
+<div class="pagination">
+  {% if beneficiaries.has_prev %}
+    <a href="{{ url_for('beneficiary.list_beneficiaries', page=beneficiaries.prev_num, q=search, state_id=state_id, status=status_filter) }}" class="btn btn-outline">← Prev</a>
+  {% endif %}
+  <span class="page-info">Page {{ beneficiaries.page }} of {{ beneficiaries.pages }} ({{ beneficiaries.total }} total)</span>
+  {% if beneficiaries.has_next %}
+    <a href="{{ url_for('beneficiary.list_beneficiaries', page=beneficiaries.next_num, q=search, state_id=state_id, status=status_filter) }}" class="btn btn-outline">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

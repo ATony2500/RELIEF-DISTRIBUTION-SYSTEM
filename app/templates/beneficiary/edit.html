@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Edit Beneficiary{% endblock %}
+{% block page_title %}Edit Beneficiary{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Edit: {{ b.full_name }}</h2>
+  <a href="{{ url_for('beneficiary.view', beneficiary_id=b.id) }}" class="btn btn-outline">← Back</a>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="POST">
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><h3>Personal Details</h3></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>NIN <small>(cannot be changed)</small></label>
+          <input type="text" class="form-control" value="{{ b.masked_nin }}" disabled />
+        </div>
+        <div class="form-group">
+          <label>First Name <span class="required">*</span></label>
+          <input type="text" name="first_name" class="form-control" value="{{ b.first_name }}" required />
+        </div>
+        <div class="form-group">
+          <label>Middle Name</label>
+          <input type="text" name="middle_name" class="form-control" value="{{ b.middle_name or '' }}" />
+        </div>
+        <div class="form-group">
+          <label>Last Name <span class="required">*</span></label>
+          <input type="text" name="last_name" class="form-control" value="{{ b.last_name }}" required />
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" name="phone" class="form-control" value="{{ b.phone or '' }}" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" class="form-control" value="{{ b.email or '' }}" />
+        </div>
+        <div class="form-group">
+          <label>LGA</label>
+          <select name="lga_id" class="form-control">
+            {% for lga in lgas %}
+              <option value="{{ lga.id }}" {% if lga.id == b.lga_id %}selected{% endif %}>
+                {{ lga.name }} ({{ lga.state.name }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <textarea name="address" class="form-control" rows="2">{{ b.address or '' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Status & Flags</h3></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Status</label>
+          <select name="status" class="form-control">
+            <option value="active" {% if b.status == 'active' %}selected{% endif %}>Active</option>
+            <option value="inactive" {% if b.status == 'inactive' %}selected{% endif %}>Inactive</option>
+            <option value="flagged" {% if b.status == 'flagged' %}selected{% endif %}>Flagged</option>
+            <option value="duplicate" {% if b.status == 'duplicate' %}selected{% endif %}>Duplicate</option>
+          </select>
+        </div>
+        <div class="checkbox-group mt-3">
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_disabled" {% if b.is_disabled %}checked{% endif %} />
+            Person with disability
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_pregnant" {% if b.is_pregnant %}checked{% endif %} />
+            Pregnant / nursing mother
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_elderly" {% if b.is_elderly %}checked{% endif %} />
+            Elderly (65+)
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_unaccompanied_minor" {% if b.is_unaccompanied_minor %}checked{% endif %} />
+            Unaccompanied minor
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+    <a href="{{ url_for('beneficiary.view', beneficiary_id=b.id) }}" class="btn btn-outline">Cancel</a>
+  </div>
+</form>
+{% endblock %}

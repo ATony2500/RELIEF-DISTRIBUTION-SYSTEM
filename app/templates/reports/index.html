@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div class="page-header"><h2>Reports &amp; Analytics</h2></div>
+
+<div class="card-grid-3">
+  <a href="{{ url_for('reports.beneficiary_summary') }}" class="card report-card">
+    <div class="report-icon">👥</div>
+    <h3>Beneficiary Summary</h3>
+    <p>Breakdown by state, gender, vulnerability status, NIN verification.</p>
+  </a>
+  <a href="{{ url_for('reports.inventory_report') }}" class="card report-card">
+    <div class="report-icon">📦</div>
+    <h3>Inventory Report</h3>
+    <p>Current stock levels, low-stock alerts, items by category across warehouses.</p>
+  </a>
+  <a href="{{ url_for('reports.distribution_report') }}" class="card report-card">
+    <div class="report-icon">🚛</div>
+    <h3>Distribution Report</h3>
+    <p>Batch completion rates, disaster types covered, overall delivery statistics.</p>
+  </a>
+  {% if current_user.is_admin %}
+  <a href="{{ url_for('reports.audit_summary') }}" class="card report-card">
+    <div class="report-icon">📜</div>
+    <h3>Audit Trail</h3>
+    <p>Full chronological log of all system actions and user activities.</p>
+  </a>
+  {% endif %}
+</div>
+{% endblock %}

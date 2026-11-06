@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Add Distribution Record{% endblock %}
+{% block page_title %}Add Distribution Record{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Record Distribution — <code>{{ batch.batch_code }}</code></h2>
+  <a href="{{ url_for('distribution.batch_detail', batch_id=batch.id) }}" class="btn btn-outline">← Back</a>
+</div>
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="POST">
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><h3>Beneficiary Lookup</h3></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Search by NIN</label>
+          <div class="input-group">
+            <input type="text" id="ninSearch" class="form-control" placeholder="Enter 11-digit NIN…" maxlength="11" inputmode="numeric" />
+            <button type="button" class="btn btn-outline" id="lookupBtn">🔍 Lookup</button>
+          </div>
+          <div id="lookupResult" class="lookup-result mt-2"></div>
+        </div>
+        <input type="hidden" name="beneficiary_id" id="beneficiary_id" required />
+        <div id="beneficiaryInfo" class="beneficiary-confirm hidden">
+          <div class="alert alert-success">
+            <strong>✓ <span id="bName"></span></strong><br />
+            <small id="bExtra"></small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Distribution Details</h3></div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Relief Item <span class="required">*</span></label>
+          <select name="item_id" class="form-control" required>
+            <option value="">Select item…</option>
+            {% for item in items %}
+              <option value="{{ item.id }}">{{ item.item_name }} ({{ item.quantity_available }} {{ item.unit }} available)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantity <span class="required">*</span></label>
+          <input type="number" name="quantity_given" class="form-control" step="0.1" min="0.1" required />
+        </div>
+        <div class="form-group">
+          <label>Distribution Point <span class="required">*</span></label>
+          <select name="distribution_point_id" id="dist_point" class="form-control" required>
+            <option value="">Select point…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>State (for point filter)</label>
+          <select id="stateSelect" class="form-control">
+            <option value="">Select State…</option>
+            {% for s in states %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="nin_confirmed" id="nin_confirmed" />
+            NIN confirmed at distribution point
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg">✅ Record Distribution</button>
+    <a href="{{ url_for('distribution.batch_detail', batch_id=batch.id) }}" class="btn btn-outline">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Beneficiary NIN lookup
+document.getElementById('lookupBtn').addEventListener('click', function() {
+  const nin = document.getElementById('ninSearch').value.trim();
+  const result = document.getElementById('lookupResult');
+  if (!/^\d{11}$/.test(nin)) {
+    result.innerHTML = '<span class="text-danger">Enter a valid 11-digit NIN.</span>';
+    return;
+  }
+  result.innerHTML = '<span class="text-muted">Searching…</span>';
+  fetch(`/distribution/lookup-beneficiary?nin=${nin}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.found) {
+        document.getElementById('beneficiary_id').value = data.id;
+        document.getElementById('bName').textContent = data.full_name;
+        document.getElementById('bExtra').textContent = `NIN: ${data.masked_nin} | LGA: ${data.lga} | Verified: ${data.nin_verified ? 'Yes' : 'No'}`;
+        document.getElementById('beneficiaryInfo').classList.remove('hidden');
+        result.innerHTML = '';
+      } else {
+        result.innerHTML = `<span class="text-danger">${data.message || 'Beneficiary not found.'}</span>`;
+        document.getElementById('beneficiaryInfo').classList.add('hidden');
+        document.getElementById('beneficiary_id').value = '';
+      }
+    });
+});
+
+// Load distribution points by state
+document.getElementById('stateSelect').addEventListener('change', function() {
+  const stateId = this.value;
+  const dpSelect = document.getElementById('dist_point');
+  dpSelect.innerHTML = '<option>Loading…</option>';
+  if (!stateId) { dpSelect.innerHTML = '<option value="">Select point…</option>'; return; }
+  fetch(`/api/states/${stateId}/lgas`)
+    .then(r => r.json())
+    .then(lgas => {
+      const promises = lgas.map(l => fetch(`/api/lgas/${l.id}/distribution-points`).then(r => r.json()));
+      return Promise.all(promises);
+    })
+    .then(results => {
+      dpSelect.innerHTML = '<option value="">Select point…</option>';
+      results.flat().forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        dpSelect.appendChild(opt);
+      });
+    });
+});
+</script>
+{% endblock %}

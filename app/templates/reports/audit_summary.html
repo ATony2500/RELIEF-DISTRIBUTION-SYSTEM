@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Audit Trail{% endblock %}
+{% block page_title %}Audit Trail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>System Audit Trail</h2>
+  <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr><th>Timestamp</th><th>User</th><th>Action</th><th>Entity</th><th>Description</th><th>IP</th></tr>
+      </thead>
+      <tbody>
+        {% for log in logs.items %}
+        <tr>
+          <td class="text-muted">{{ log.timestamp.strftime('%d %b %Y %H:%M:%S') }}</td>
+          <td>{{ log.user.username if log.user else 'System' }}</td>
+          <td><code>{{ log.action }}</code></td>
+          <td class="text-muted">{{ (log.entity_type or '') }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}</td>
+          <td>{{ (log.description or '') | truncate(80) }}</td>
+          <td class="text-muted">{{ log.ip_address or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if logs.pages > 1 %}
+<div class="pagination mt-3">
+  {% if logs.has_prev %}<a href="{{ url_for('reports.audit_summary', page=logs.prev_num) }}" class="btn btn-outline">← Prev</a>{% endif %}
+  <span class="page-info">Page {{ logs.page }} of {{ logs.pages }}</span>
+  {% if logs.has_next %}<a href="{{ url_for('reports.audit_summary', page=logs.next_num) }}" class="btn btn-outline">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

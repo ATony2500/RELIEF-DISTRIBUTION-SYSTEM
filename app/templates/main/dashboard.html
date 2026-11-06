@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Welcome, {{ current_user.full_name.split()[0] }}</h2>
+  <span class="badge badge-{{ current_user.role }}">{{ current_user.role | replace('_', ' ') | title }}</span>
+</div>
+
+<!-- KPI Cards -->
+<div class="stats-grid">
+  <div class="stat-card stat-blue">
+    <div class="stat-icon">👥</div>
+    <div class="stat-value">{{ stats.total_beneficiaries | format_number if stats.total_beneficiaries else stats.total_beneficiaries }}</div>
+    <div class="stat-label">Registered Beneficiaries</div>
+    <a href="{{ url_for('beneficiary.list_beneficiaries') }}" class="stat-link">View all →</a>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-icon">✅</div>
+    <div class="stat-value">{{ stats.completed_distributions }}</div>
+    <div class="stat-label">Completed Distributions</div>
+    <a href="{{ url_for('distribution.batch_list') }}" class="stat-link">View all →</a>
+  </div>
+  <div class="stat-card stat-orange">
+    <div class="stat-icon">🚛</div>
+    <div class="stat-value">{{ stats.active_batches }}</div>
+    <div class="stat-label">Active Batches</div>
+    <a href="{{ url_for('distribution.batch_list') }}?status=in_progress" class="stat-link">View active →</a>
+  </div>
+  <div class="stat-card {% if stats.low_stock_count > 0 %}stat-red{% else %}stat-teal{% endif %}">
+    <div class="stat-icon">🏭</div>
+    <div class="stat-value">{{ stats.total_warehouses }}</div>
+    <div class="stat-label">Active Warehouses
+      {% if stats.low_stock_count > 0 %}
+        <span class="badge badge-danger">{{ stats.low_stock_count }} low stock</span>
+      {% endif %}
+    </div>
+    <a href="{{ url_for('inventory.warehouses') }}" class="stat-link">View warehouses →</a>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <!-- Low Stock Alerts -->
+  <div class="card">
+    <div class="card-header">
+      <h3>⚠️ Low Stock Alerts</h3>
+      <a href="{{ url_for('inventory.item_list') }}?low_stock=1" class="btn btn-sm btn-outline">View All</a>
+    </div>
+    <div class="card-body">
+      {% if low_stock_items %}
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Item</th><th>Warehouse</th><th>Available</th><th>Threshold</th></tr>
+          </thead>
+          <tbody>
+            {% for item in low_stock_items %}
+            <tr>
+              <td>{{ item.item_name }}</td>
+              <td>{{ item.warehouse.code }}</td>
+              <td class="text-danger"><strong>{{ item.quantity_available }} {{ item.unit }}</strong></td>
+              <td>{{ item.minimum_threshold }} {{ item.unit }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted text-center py-3">All stock levels are healthy. ✅</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Recent Batches -->
+  <div class="card">
+    <div class="card-header">
+      <h3>🚛 Recent Distribution Batches</h3>
+      <a href="{{ url_for('distribution.batch_list') }}" class="btn btn-sm btn-outline">View All</a>
+    </div>
+    <div class="card-body">
+      {% if recent_batches %}
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Code</th><th>Title</th><th>Type</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for batch in recent_batches %}
+            <tr>
+              <td><a href="{{ url_for('distribution.batch_detail', batch_id=batch.id) }}">{{ batch.batch_code }}</a></td>
+              <td>{{ batch.title | truncate(35) }}</td>
+              <td><span class="badge badge-info">{{ batch.disaster_type }}</span></td>
+              <td><span class="badge badge-{{ batch.status }}">{{ batch.status | replace('_', ' ') | title }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted text-center py-3">No distribution batches yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Recent Audit Log -->
+  {% if current_user.is_admin %}
+  <div class="card card-wide">
+    <div class="card-header">
+      <h3>📜 Recent Audit Log</h3>
+      <a href="{{ url_for('admin.audit_log_view') }}" class="btn btn-sm btn-outline">Full Log</a>
+    </div>
+    <div class="card-body">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+          {% for log in recent_logs %}
+          <tr>
+            <td class="text-muted">{{ log.timestamp.strftime('%d %b %H:%M') }}</td>
+            <td>{{ log.user.username if log.user else 'System' }}</td>
+            <td><code>{{ log.action }}</code></td>
+            <td class="text-muted">{{ (log.description or '') | truncate(60) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

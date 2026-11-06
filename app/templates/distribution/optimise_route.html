@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Optimise Route{% endblock %}
+{% block page_title %}Route Optimisation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Route Optimisation — <code>{{ batch.batch_code }}</code></h2>
+  <a href="{{ url_for('distribution.batch_detail', batch_id=batch.id) }}" class="btn btn-outline">← Back</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <h3>📍 Origin Warehouse: {{ warehouse.name }}</h3>
+    <span class="text-muted">
+      {% if warehouse.latitude and warehouse.longitude %}
+        {{ warehouse.latitude }}, {{ warehouse.longitude }}
+      {% else %}
+        <span class="badge badge-warning">⚠ No GPS coordinates set</span>
+      {% endif %}
+    </span>
+  </div>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="POST">
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-header"><h3>Select Distribution Points</h3></div>
+      <div class="card-body">
+        <p class="text-muted mb-3">
+          Select the delivery points for this batch. The Nearest Neighbour
+          algorithm will compute the optimal visit order.
+        </p>
+        <div class="form-group">
+          <label>Filter by State</label>
+          <select id="stateFilter" class="form-control">
+            <option value="">All States</option>
+            {% for s in states %}
+              <option value="{{ s.name }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="checkbox-group" id="pointCheckboxes">
+          {% for p in all_points %}
+            <label class="checkbox-label point-item" data-state="{{ p.lga.state.name if p.lga else '' }}">
+              <input type="checkbox" name="point_ids" value="{{ p.id }}" />
+              <span>{{ p.name }}</span>
+              <small class="text-muted">{{ p.lga.name if p.lga else '' }} · {{ p.latitude }}, {{ p.longitude }}</small>
+            </label>
+          {% else %}
+            <p class="text-muted">No active distribution points found.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if optimized_result %}
+    <div class="card">
+      <div class="card-header">
+        <h3>✅ Optimised Route</h3>
+        <span class="badge badge-success">{{ optimized_result.total_distance_km }} km total</span>
+      </div>
+      <div class="card-body">
+        <div class="route-steps">
+          <div class="route-step route-origin">
+            <span class="step-num">🏭</span>
+            <div><strong>{{ warehouse.name }}</strong><br><small class="text-muted">Origin</small></div>
+          </div>
+          {% for stop in optimized_result.ordered_stops %}
+          <div class="route-connector">↓ {{ stop.distance_from_prev_km }} km</div>
+          <div class="route-step">
+            <span class="step-num">{{ loop.index }}</span>
+            <div>
+              <strong>{{ stop.name }}</strong><br>
+              <small class="text-muted">{{ stop.latitude }}, {{ stop.longitude }}</small>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary btn-lg">🗺️ Generate Optimised Route</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('stateFilter').addEventListener('change', function() {
+  const val = this.value.toLowerCase();
+  document.querySelectorAll('.point-item').forEach(el => {
+    const state = el.dataset.state.toLowerCase();
+    el.style.display = (!val || state.includes(val)) ? '' : 'none';
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Beneficiary Summary{% endblock %}
+{% block page_title %}Beneficiary Summary Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Beneficiary Summary</h2>
+  <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card stat-blue"><div class="stat-icon">👥</div><div class="stat-value">{{ total }}</div><div class="stat-label">Total Active</div></div>
+  <div class="stat-card stat-green"><div class="stat-icon">✅</div><div class="stat-value">{{ verified }}</div><div class="stat-label">NIN Verified</div></div>
+  <div class="stat-card stat-orange"><div class="stat-icon">❓</div><div class="stat-value">{{ unverified }}</div><div class="stat-label">NIN Unverified</div></div>
+</div>
+
+<div class="card-grid">
+  <div class="card">
+    <div class="card-header"><h3>By State</h3></div>
+    <div class="card-body p-0">
+      <table class="table">
+        <thead><tr><th>State</th><th>Count</th><th>Share</th></tr></thead>
+        <tbody>
+          {% for state_name, count in by_state %}
+          <tr>
+            <td>{{ state_name }}</td>
+            <td>{{ count }}</td>
+            <td>
+              <div class="mini-bar">
+                <div class="mini-bar-fill" style="width:{{ (count / total * 100) if total else 0 }}%"></div>
+              </div>
+              <small>{{ "%.1f" | format(count / total * 100 if total else 0) }}%</small>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>By Gender</h3></div>
+    <div class="card-body">
+      {% for gender, count in gender_counts %}
+      <div class="bar-item mb-2">
+        <div class="bar-label">{{ gender or 'Unknown' }}: {{ count }}</div>
+        <div class="bar-track">
+          <div class="bar-fill bar-fill-blue" style="width:{{ (count / total * 100) if total else 0 }}%"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Vulnerability Profile</h3></div>
+    <div class="card-body">
+      {% set vuln_items = [
+        ('♿ Disabled', vulnerability.disabled),
+        ('🤰 Pregnant', vulnerability.pregnant),
+        ('👴 Elderly', vulnerability.elderly),
+        ('👦 Unaccompanied', vulnerability.unaccompanied)
+      ] %}
+      {% for label, count in vuln_items %}
+      <div class="bar-item mb-2">
+        <div class="bar-label">{{ label }}: {{ count }}</div>
+        <div class="bar-track">
+          <div class="bar-fill bar-fill-orange" style="width:{{ (count / total * 100) if total else 0 }}%"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

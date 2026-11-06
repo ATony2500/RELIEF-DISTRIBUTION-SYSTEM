@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ batch.batch_code }}{% endblock %}
+{% block page_title %}Distribution Batch{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>{{ batch.title }}</h2>
+  <div>
+    <a href="{{ url_for('distribution.add_record', batch_id=batch.id) }}" class="btn btn-primary">➕ Add Record</a>
+    <a href="{{ url_for('distribution.optimise_route', batch_id=batch.id) }}" class="btn btn-outline">🗺️ Optimise Route</a>
+    <a href="{{ url_for('distribution.batch_list') }}" class="btn btn-outline">← Back</a>
+  </div>
+</div>
+
+<!-- Batch info -->
+<div class="card-grid mb-3">
+  <div class="card">
+    <div class="card-body">
+      <dl class="detail-list">
+        <dt>Batch Code</dt><dd><code>{{ batch.batch_code }}</code></dd>
+        <dt>Disaster Type</dt><dd><span class="badge badge-info">{{ batch.disaster_type }}</span></dd>
+        <dt>Source Warehouse</dt><dd>{{ batch.source_warehouse.name }}</dd>
+        <dt>Planned Date</dt><dd>{{ batch.planned_date.strftime('%d %b %Y') }}</dd>
+        {% if batch.start_date %}<dt>Started</dt><dd>{{ batch.start_date.strftime('%d %b %Y %H:%M') }}</dd>{% endif %}
+        {% if batch.end_date %}<dt>Completed</dt><dd>{{ batch.end_date.strftime('%d %b %Y %H:%M') }}</dd>{% endif %}
+        {% if batch.route %}<dt>Route</dt><dd>{{ batch.route.route_code }} ({{ batch.route.total_distance_km }} km)</dd>{% endif %}
+      </dl>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="stat-highlight">
+        <div>Status: <span class="badge badge-{{ batch.status }}">{{ batch.status | replace('_',' ') | title }}</span></div>
+        <div class="mt-2">Total Records: <strong>{{ batch.total_beneficiaries }}</strong></div>
+        <div>Completed: <strong>{{ batch.completed_distributions }}</strong></div>
+      </div>
+      {% if batch.status != 'completed' and batch.status != 'cancelled' %}
+        <div class="mt-3">
+          <form method="POST" action="{{ url_for('distribution.update_batch_status', batch_id=batch.id) }}" class="inline-form">
+            <select name="status" class="form-control form-control-sm">
+              {% for s in ['planned','in_progress','completed','cancelled'] %}
+                <option value="{{ s }}" {% if s == batch.status %}selected{% endif %}>{{ s | replace('_',' ') | title }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline">Update Status</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Records -->
+<div class="card">
+  <div class="card-header">
+    <h3>Distribution Records</h3>
+  </div>
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr><th>Beneficiary</th><th>NIN</th><th>Item</th><th>Quantity</th><th>Point</th><th>NIN Confirmed</th><th>Status</th><th>Time</th></tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td>{{ r.beneficiary.full_name }}</td>
+          <td><code>{{ r.beneficiary.masked_nin }}</code></td>
+          <td>{{ r.item.item_name }}</td>
+          <td>{{ r.quantity_given }} {{ r.item.unit }}</td>
+          <td>{{ r.distribution_point.name if r.distribution_point else '—' }}</td>
+          <td>{% if r.nin_confirmed %}✅{% else %}❌{% endif %}</td>
+          <td><span class="badge badge-{{ r.status }}">{{ r.status | title }}</span></td>
+          <td class="text-muted">{{ r.distribution_timestamp.strftime('%d %b %H:%M') if r.distribution_timestamp else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No records yet. <a href="{{ url_for('distribution.add_record', batch_id=batch.id) }}">Add first record →</a></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

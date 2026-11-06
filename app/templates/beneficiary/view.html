@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}{{ beneficiary.full_name }}{% endblock %}
+{% block page_title %}Beneficiary Profile{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>{{ beneficiary.full_name }}</h2>
+  <div>
+    <a href="{{ url_for('beneficiary.edit', beneficiary_id=beneficiary.id) }}" class="btn btn-outline">✏️ Edit</a>
+    <a href="{{ url_for('beneficiary.list_beneficiaries') }}" class="btn btn-outline">← Back</a>
+  </div>
+</div>
+
+<div class="card-grid">
+  <div class="card">
+    <div class="card-header">
+      <h3>Identity</h3>
+      {% if beneficiary.nin_verified %}
+        <span class="badge badge-success">✓ NIN Verified</span>
+      {% else %}
+        <span class="badge badge-warning">NIN Unverified</span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <dl class="detail-list">
+        <dt>Full Name</dt><dd>{{ beneficiary.full_name }}</dd>
+        <dt>NIN</dt><dd><code>{{ beneficiary.masked_nin }}</code></dd>
+        <dt>Date of Birth</dt><dd>{{ beneficiary.date_of_birth.strftime('%d %b %Y') if beneficiary.date_of_birth else '—' }}</dd>
+        <dt>Gender</dt><dd>{{ beneficiary.gender }}</dd>
+        <dt>Status</dt><dd><span class="badge badge-{{ beneficiary.status }}">{{ beneficiary.status | title }}</span></dd>
+      </dl>
+      {% if not beneficiary.nin_verified %}
+        <button class="btn btn-outline btn-sm" id="reverifyBtn" data-id="{{ beneficiary.id }}">
+          🔄 Re-verify NIN
+        </button>
+        <div id="reverifyResult" class="form-hint mt-2"></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Contact & Location</h3></div>
+    <div class="card-body">
+      <dl class="detail-list">
+        <dt>Phone</dt><dd>{{ beneficiary.phone or '—' }}</dd>
+        <dt>Email</dt><dd>{{ beneficiary.email or '—' }}</dd>
+        <dt>LGA</dt><dd>{{ beneficiary.lga.name if beneficiary.lga else '—' }}</dd>
+        <dt>State</dt><dd>{{ beneficiary.lga.state.name if beneficiary.lga else '—' }}</dd>
+        <dt>Address</dt><dd>{{ beneficiary.address or '—' }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Vulnerability Profile</h3></div>
+    <div class="card-body">
+      <div class="vulnerability-tags">
+        <span class="vuln-tag {% if beneficiary.is_disabled %}active{% endif %}">♿ Disabled</span>
+        <span class="vuln-tag {% if beneficiary.is_pregnant %}active{% endif %}">🤰 Pregnant</span>
+        <span class="vuln-tag {% if beneficiary.is_elderly %}active{% endif %}">👴 Elderly</span>
+        <span class="vuln-tag {% if beneficiary.is_unaccompanied_minor %}active{% endif %}">👦 Unaccompanied Minor</span>
+        <span class="vuln-tag {% if beneficiary.is_head_of_household %}active{% endif %}">🏠 Head of Household</span>
+      </div>
+      {% if beneficiary.household %}
+        <div class="mt-3">
+          <strong>Household:</strong> {{ beneficiary.household.household_code }}
+          ({{ beneficiary.household.household_size }} members)
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Distribution History</h3></div>
+    <div class="card-body">
+      {% set records = beneficiary.distribution_records.order_by('created_at desc').limit(10).all() %}
+      {% if records %}
+        <table class="table table-sm">
+          <thead><tr><th>Batch</th><th>Item</th><th>Qty</th><th>Date</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td>{{ r.batch.batch_code }}</td>
+              <td>{{ r.item.item_name }}</td>
+              <td>{{ r.quantity_given }} {{ r.item.unit }}</td>
+              <td>{{ r.distribution_timestamp.strftime('%d %b %Y') if r.distribution_timestamp else '—' }}</td>
+              <td><span class="badge badge-{{ r.status }}">{{ r.status | title }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted">No distribution records yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="text-muted mt-3 text-sm">
+  Registered {{ beneficiary.registered_at.strftime('%d %b %Y at %H:%M') }}
+  {% if beneficiary.verification_date %}
+    · NIN verified {{ beneficiary.verification_date.strftime('%d %b %Y') }}: {{ beneficiary.verification_notes }}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const reverifyBtn = document.getElementById('reverifyBtn');
+if (reverifyBtn) {
+  reverifyBtn.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const result = document.getElementById('reverifyResult');
+    result.className = 'form-hint text-muted';
+    result.textContent = 'Verifying…';
+    fetch(`/beneficiaries/${id}/verify-nin`, { method: 'POST',
+      headers: { 'X-CSRFToken': '' } })
+      .then(r => r.json())
+      .then(data => {
+        result.className = data.verified ? 'form-hint text-success' : 'form-hint text-danger';
+        result.textContent = data.message;
+        if (data.verified) location.reload();
+      });
+  });
+}
+</script>
+{% endblock %}

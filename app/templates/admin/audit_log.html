@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Audit Log{% endblock %}
+{% block page_title %}Audit Log{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Audit Log</h2>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" class="filter-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Filter by Action</label>
+          <input type="text" name="action" class="form-control" placeholder="e.g. LOGIN, CREATE_BENEFICIARY" value="{{ action_filter }}" />
+        </div>
+        <div class="form-group align-end">
+          <button type="submit" class="btn btn-primary">🔍 Filter</button>
+          <a href="{{ url_for('admin.audit_log_view') }}" class="btn btn-outline">Clear</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr><th>Timestamp</th><th>User</th><th>Action</th><th>Entity</th><th>Description</th><th>IP</th></tr>
+      </thead>
+      <tbody>
+        {% for log in logs.items %}
+        <tr>
+          <td class="text-muted">{{ log.timestamp.strftime('%d %b %Y %H:%M:%S') }}</td>
+          <td>{{ log.user.username if log.user else 'System' }}</td>
+          <td><code>{{ log.action }}</code></td>
+          <td class="text-muted">{{ log.entity_type or '' }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}</td>
+          <td>{{ (log.description or '') | truncate(80) }}</td>
+          <td class="text-muted">{{ log.ip_address or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if logs.pages > 1 %}
+<div class="pagination mt-3">
+  {% if logs.has_prev %}<a href="{{ url_for('admin.audit_log_view', page=logs.prev_num, action=action_filter) }}" class="btn btn-outline">← Prev</a>{% endif %}
+  <span class="page-info">Page {{ logs.page }} of {{ logs.pages }}</span>
+  {% if logs.has_next %}<a href="{{ url_for('admin.audit_log_view', page=logs.next_num, action=action_filter) }}" class="btn btn-outline">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Inventory Items{% endblock %}
+{% block page_title %}Inventory{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Inventory Items</h2>
+  <a href="{{ url_for('inventory.add_item') }}" class="btn btn-primary">➕ Add Item</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" class="filter-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Warehouse</label>
+          <select name="warehouse_id" class="form-control">
+            <option value="">All Warehouses</option>
+            {% for wh in warehouses %}
+              <option value="{{ wh.id }}" {% if wh_id == wh.id %}selected{% endif %}>{{ wh.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select name="category" class="form-control">
+            <option value="">All Categories</option>
+            {% for cat in ['Food','Water','Medicine','Shelter','Clothing','Hygiene','Other'] %}
+              <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group align-end">
+          <label class="checkbox-label">
+            <input type="checkbox" name="low_stock" value="1" {% if low_only %}checked{% endif %} />
+            Low stock only
+          </label>
+        </div>
+        <div class="form-group align-end">
+          <button type="submit" class="btn btn-primary">🔍 Filter</button>
+          <a href="{{ url_for('inventory.item_list') }}" class="btn btn-outline">Clear</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr><th>Item</th><th>Warehouse</th><th>Category</th><th>Available</th><th>Threshold</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td><strong>{{ item.item_name }}</strong></td>
+          <td>{{ item.warehouse.code }}</td>
+          <td><span class="badge badge-info">{{ item.category }}</span></td>
+          <td class="{% if item.is_low_stock %}text-danger{% endif %}">{{ item.quantity_available }} {{ item.unit }}</td>
+          <td>{{ item.minimum_threshold }} {{ item.unit }}</td>
+          <td>
+            {% if item.is_low_stock %}
+              <span class="badge badge-danger">Low Stock</span>
+            {% else %}
+              <span class="badge badge-success">OK</span>
+            {% endif %}
+          </td>
+          <td><a href="{{ url_for('inventory.stock_movement', item_id=item.id) }}" class="btn btn-sm btn-outline">Move</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No items found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

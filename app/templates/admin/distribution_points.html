@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Distribution Points{% endblock %}
+{% block page_title %}Distribution Points{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Distribution Points</h2>
+  <a href="{{ url_for('admin.create_distribution_point') }}" class="btn btn-primary">➕ Add Point</a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr><th>Name</th><th>LGA</th><th>State</th><th>Capacity</th><th>Contact</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for p in points.items %}
+        <tr>
+          <td><strong>{{ p.name }}</strong><br><small class="text-muted">{{ p.address or '' }}</small></td>
+          <td>{{ p.lga.name if p.lga else '—' }}</td>
+          <td>{{ p.lga.state.name if p.lga else '—' }}</td>
+          <td>{{ p.capacity or '—' }} beneficiaries/day</td>
+          <td>{{ p.contact_person or '—' }}<br><small>{{ p.contact_phone or '' }}</small></td>
+          <td>{% if p.is_active %}<span class="badge badge-success">Active</span>{% else %}<span class="badge badge-danger">Inactive</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No distribution points found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if points.pages > 1 %}
+<div class="pagination mt-3">
+  {% if points.has_prev %}<a href="{{ url_for('admin.distribution_points', page=points.prev_num) }}" class="btn btn-outline">← Prev</a>{% endif %}
+  <span class="page-info">Page {{ points.page }} of {{ points.pages }}</span>
+  {% if points.has_next %}<a href="{{ url_for('admin.distribution_points', page=points.next_num) }}" class="btn btn-outline">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

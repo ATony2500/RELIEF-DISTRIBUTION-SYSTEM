@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Warehouses{% endblock %}
+{% block page_title %}Warehouses{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Warehouse Network</h2>
+  <a href="{{ url_for('inventory.create_warehouse') }}" class="btn btn-primary">➕ Add Warehouse</a>
+</div>
+
+<div class="card-grid-3">
+  {% for wh in warehouses.items %}
+  <div class="card warehouse-card">
+    <div class="card-header">
+      <div>
+        <h3>{{ wh.name }}</h3>
+        <span class="badge badge-info">{{ wh.code }}</span>
+      </div>
+      <span class="{% if wh.is_active %}status-dot-green{% else %}status-dot-red{% endif %}"></span>
+    </div>
+    <div class="card-body">
+      <dl class="detail-list detail-list-sm">
+        <dt>State</dt><dd>{{ wh.state.name }}</dd>
+        <dt>Capacity</dt><dd>{{ wh.capacity_tonnes or '—' }} tonnes</dd>
+        <dt>Manager</dt><dd>{{ wh.manager_name or '—' }}</dd>
+        <dt>Items</dt><dd>{{ wh.inventory_items.count() }} types</dd>
+      </dl>
+
+      {% set all_items = wh.inventory_items.all() %}
+      {% set low = all_items | selectattr('is_low_stock') | list %}
+      {% if low %}
+        <div class="alert alert-warning mt-2 py-1">⚠ {{ low | length }} item(s) below threshold</div>
+      {% endif %}
+    </div>
+    <div class="card-footer">
+      <a href="{{ url_for('inventory.warehouse_detail', wh_id=wh.id) }}" class="btn btn-outline btn-sm">View Inventory</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-span-3 text-center text-muted py-4">No warehouses found.</div>
+  {% endfor %}
+</div>
+
+{% if warehouses.pages > 1 %}
+<div class="pagination mt-3">
+  {% if warehouses.has_prev %}
+    <a href="{{ url_for('inventory.warehouses', page=warehouses.prev_num) }}" class="btn btn-outline">← Prev</a>
+  {% endif %}
+  <span class="page-info">Page {{ warehouses.page }} of {{ warehouses.pages }}</span>
+  {% if warehouses.has_next %}
+    <a href="{{ url_for('inventory.warehouses', page=warehouses.next_num) }}" class="btn btn-outline">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
