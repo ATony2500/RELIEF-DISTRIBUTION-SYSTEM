@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Stock Movement — {{ item.item_name }}{% endblock %}
 {% block page_title %}Stock Movement{% endblock %}
 
@@ -20,6 +20,7 @@
       </div>
 
       <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="form-group">
           <label>Movement Type <span class="required">*</span></label>
           <select name="movement_type" class="form-control" required>
@@ -80,3 +81,4 @@
   </div>
 </div>
 {% endblock %}
+

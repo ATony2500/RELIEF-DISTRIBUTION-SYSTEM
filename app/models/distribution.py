@@ -1,57 +1,45 @@
 """
 Distribution models — batches and individual records.
 
-A DistributionBatch groups one distribution event (e.g., "Flood Response – Kogi Oct 2026").
-Each beneficiary at each point gets a DistributionRecord within that batch.
+Improvement #6:  Unique constraint on (batch_id, beneficiary_id, item_id)
+                 to prevent duplicate distributions.
+Improvement #17: timezone-aware datetimes.
+Improvement #22: Indexes on batch_id, beneficiary_id, status.
 """
 
-from datetime import datetime
 from app import db
+from app.utils.helpers import utc_now
 
 
 class DistributionBatch(db.Model):
-    """
-    A distribution campaign or exercise.
-    """
-
     __tablename__ = "distribution_batches"
 
     id = db.Column(db.Integer, primary_key=True)
-    batch_code = db.Column(db.String(30), unique=True, nullable=False)
+    batch_code = db.Column(db.String(30), unique=True, nullable=False, index=True)
     title = db.Column(db.String(200), nullable=False)
     disaster_type = db.Column(
         db.Enum(
-            "Flood",
-            "Conflict",
-            "Epidemic",
-            "Drought",
-            "Other",
+            "Flood", "Conflict", "Epidemic", "Drought", "Other",
             name="disaster_type_enum",
         ),
         nullable=False,
     )
     description = db.Column(db.Text)
 
-    # Source warehouse
     source_warehouse_id = db.Column(
-        db.Integer, db.ForeignKey("warehouses.id"), nullable=False
+        db.Integer, db.ForeignKey("warehouses.id"), nullable=False, index=True
     )
-
-    # Linked route
     route_id = db.Column(
         db.Integer, db.ForeignKey("delivery_routes.id"), nullable=True
     )
-
     status = db.Column(
         db.Enum(
-            "planned",
-            "in_progress",
-            "completed",
-            "cancelled",
+            "planned", "in_progress", "completed", "cancelled",
             name="batch_status_enum",
         ),
         default="planned",
         nullable=False,
+        index=True,
     )
 
     planned_date = db.Column(db.Date, nullable=False)
@@ -59,8 +47,8 @@ class DistributionBatch(db.Model):
     end_date = db.Column(db.DateTime)
 
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now, index=True)
+    updated_at = db.Column(db.DateTime, onupdate=utc_now)
 
     # Relationships
     source_warehouse = db.relationship("Warehouse", back_populates="batches")
@@ -85,18 +73,22 @@ class DistributionBatch(db.Model):
 
 
 class DistributionRecord(db.Model):
-    """
-    A single distribution event — one beneficiary receiving items at a point.
-    """
-
     __tablename__ = "distribution_records"
+
+    # #6: Unique constraint prevents duplicate distributions
+    __table_args__ = (
+        db.UniqueConstraint(
+            "batch_id", "beneficiary_id", "item_id",
+            name="uq_distribution_batch_beneficiary_item",
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     batch_id = db.Column(
-        db.Integer, db.ForeignKey("distribution_batches.id"), nullable=False
+        db.Integer, db.ForeignKey("distribution_batches.id"), nullable=False, index=True
     )
     beneficiary_id = db.Column(
-        db.Integer, db.ForeignKey("beneficiaries.id"), nullable=False
+        db.Integer, db.ForeignKey("beneficiaries.id"), nullable=False, index=True
     )
     household_id = db.Column(
         db.Integer, db.ForeignKey("beneficiary_households.id"), nullable=True
@@ -104,27 +96,24 @@ class DistributionRecord(db.Model):
     distribution_point_id = db.Column(
         db.Integer, db.ForeignKey("distribution_points.id"), nullable=False
     )
-
-    # What was distributed
-    item_id = db.Column(db.Integer, db.ForeignKey("inventory_items.id"), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey("inventory_items.id"), nullable=False, index=True)
     quantity_given = db.Column(db.Float, nullable=False)
 
     status = db.Column(
         db.Enum("pending", "completed", "missed", "rejected", name="dist_status_enum"),
         default="pending",
         nullable=False,
+        index=True,
     )
 
-    # Verification at distribution point
     nin_confirmed = db.Column(db.Boolean, default=False)
     confirmed_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     distribution_timestamp = db.Column(db.DateTime)
     notes = db.Column(db.Text)
 
-    # Audit
     recorded_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now, index=True)
+    updated_at = db.Column(db.DateTime, onupdate=utc_now)
 
     # Relationships
     batch = db.relationship("DistributionBatch", back_populates="records")

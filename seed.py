@@ -9,7 +9,7 @@ before inserting.
 """
 
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import random
 
 from app import create_app, db
@@ -265,7 +265,7 @@ def seed():
                         quantity_available=float(qty),
                         minimum_threshold=float(threshold),
                         donor="NEMA / WFP",
-                        batch_number=f"BATCH-{datetime.utcnow().year}-{random.randint(1000,9999)}",
+                        batch_number=f"BATCH-{datetime.now(timezone.utc).year}-{random.randint(1000,9999)}",
                     )
                     db.session.add(item)
                     db.session.flush()
@@ -309,7 +309,6 @@ def seed():
                 db.session.flush()
 
                 b = Beneficiary(
-                    nin=nin,
                     first_name=random.choice(FIRST_NAMES),
                     last_name=random.choice(LAST_NAMES),
                     date_of_birth=date(
@@ -326,10 +325,11 @@ def seed():
                     is_elderly=random.random() < 0.1,
                     is_disabled=random.random() < 0.05,
                     nin_verified=not nin.endswith(("0", "5")),
-                    verification_date=datetime.utcnow(),
+                    verification_date=datetime.now(timezone.utc),
                     verification_notes="Seeded verification",
                     registered_by=admin.id,
                 )
+                b.set_nin(nin)  # hash the NIN
                 db.session.add(b)
 
             db.session.commit()
@@ -360,6 +360,92 @@ def seed():
                 print(f"  Created sample batch: {batch.batch_code}")
         else:
             print("  Distribution batches already seeded, skipping.")
+
+        # ------------------------------------------------------------------
+        # 10. Sample distribution records
+        # ------------------------------------------------------------------
+        if DistributionRecord.query.count() == 0:
+            print("Seeding distribution records...")
+            admin = User.query.filter_by(username="admin").first()
+            batches = DistributionBatch.query.all()
+            beneficiaries = Beneficiary.query.filter_by(status="active").all()
+            dist_points = DistributionPoint.query.filter_by(is_active=True).all()
+            count = 0
+
+            for batch in batches:
+                wh = batch.source_warehouse
+                if not wh:
+                    continue
+                items = InventoryItem.query.filter_by(warehouse_id=wh.id).all()
+                if not items or not beneficiaries or not dist_points:
+                    continue
+
+                # Pick a random subset of beneficiaries for this batch
+                batch_beneficiaries = random.sample(
+                    beneficiaries, min(len(beneficiaries), random.randint(15, 25))
+                )
+                used_pairs = set()
+                batch_count = 0
+
+                for beneficiary in batch_beneficiaries:
+                    item = random.choice(items)
+                    pair = (beneficiary.id, item.id)
+                    if pair in used_pairs:
+                        continue
+                    used_pairs.add(pair)
+
+                    qty = random.randint(1, 5)
+                    if item.quantity_available < qty:
+                        continue
+
+                    dp = random.choice(dist_points)
+                    nin_confirmed = random.random() < 0.8
+
+                    record = DistributionRecord(
+                        batch_id=batch.id,
+                        beneficiary_id=beneficiary.id,
+                        household_id=beneficiary.household_id,
+                        distribution_point_id=dp.id,
+                        item_id=item.id,
+                        quantity_given=float(qty),
+                        status="completed",
+                        nin_confirmed=nin_confirmed,
+                        confirmed_by=admin.id if nin_confirmed else None,
+                        distribution_timestamp=datetime.now(timezone.utc) - timedelta(
+                            days=random.randint(0, 7),
+                            hours=random.randint(0, 23),
+                        ),
+                        recorded_by=admin.id,
+                    )
+                    db.session.add(record)
+
+                    item.quantity_available -= qty
+
+                    mv = StockMovement(
+                        item_id=item.id,
+                        warehouse_id=wh.id,
+                        movement_type="dispatch",
+                        quantity=float(qty),
+                        reference_number=batch.batch_code,
+                        notes=f"Distribution batch {batch.batch_code}",
+                        performed_by=admin.id,
+                        batch_id=batch.id,
+                    )
+                    db.session.add(mv)
+                    batch_count += 1
+                    count += 1
+
+                # Move planned batches to in_progress once they have records
+                if batch_count > 0 and batch.status == "planned":
+                    batch.status = "in_progress"
+                    batch.start_date = datetime.now(timezone.utc) - timedelta(
+                        days=random.randint(1, 7)
+                    )
+
+            db.session.commit()
+            print(f"  Added {count} distribution records.")
+        else:
+            print("  Distribution records already seeded, skipping.")
 
         print("\n=== Seeding complete! ===")
         print("Admin login: username=admin / password=Admin@1234")

@@ -1,29 +1,25 @@
 """
-Audit Trail model — immutable log of every significant system action.
-Written by the audit_log() helper in utils/audit.py.
+Audit Trail model.
+Improvement #17: timezone-aware datetimes.
+Improvement #22: Index on timestamp and action for fast log queries.
 """
 
-from datetime import datetime
 from app import db
+from app.utils.helpers import utc_now
 
 
 class AuditLog(db.Model):
-    """
-    Append-only record of system events.
-    Never update or delete rows from this table.
-    """
-
     __tablename__ = "audit_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-    action = db.Column(db.String(100), nullable=False)  # e.g. "CREATE_BENEFICIARY"
-    entity_type = db.Column(db.String(50))              # e.g. "Beneficiary"
-    entity_id = db.Column(db.Integer)                   # PK of the affected row
-    description = db.Column(db.Text)                    # Human-readable detail
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    action = db.Column(db.String(100), nullable=False, index=True)
+    entity_type = db.Column(db.String(50))
+    entity_id = db.Column(db.Integer)
+    description = db.Column(db.Text)
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.String(255))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=utc_now, nullable=False, index=True)
 
     # Relationships
     user = db.relationship("User", back_populates="audit_logs")

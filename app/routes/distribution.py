@@ -1,21 +1,32 @@
 """
-Distribution routes — batches, route optimization, individual records.
+Distribution routes.
+Improvement #6:  Duplicate distribution guard.
+Improvement #7:  Row-level locking (with_for_update) for inventory deduction.
+Improvement #8:  Batch code collision retry loop.
+Improvement #10: Confirmation step before committing a distribution record.
+Improvement #17: timezone-aware datetimes.
+Improvement #18: Input length capping.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import (
     Blueprint, render_template, redirect, url_for,
-    flash, request, abort, jsonify,
+    flash, request, jsonify,
 )
 from flask_login import login_required, current_user
+from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models.distribution import DistributionBatch, DistributionRecord
-from app.models.inventory import InventoryItem, Warehouse, StockMovement
+from app.models.inventory import InventoryItem, StockMovement
 from app.models.beneficiary import Beneficiary
 from app.models.route import DeliveryRoute, RouteStop
-from app.models.zone import DistributionPoint, State
-from app.utils.audit import audit_log
-from app.utils.helpers import paginate_query, generate_batch_code, generate_route_code
+from app.models.zone import DistributionPoint
+from app.utils.helpers import (
+    paginate_query, generate_batch_code, generate_route_code,
+    generate_unique_code, get_or_404, parse_date, form_str,
+    get_all_states, get_active_warehouses, commit_with_audit,
+    beneficiary_nin_lookup,
+)
 from app.utils.decorators import roles_required
 from app.utils.route_optimizer import optimise_route_for_points
 
@@ -46,40 +57,41 @@ def batch_list():
 @login_required
 @roles_required("admin", "programme_coord")
 def create_batch():
-    warehouses = Warehouse.query.filter_by(is_active=True).order_by(Warehouse.name).all()
+    warehouses = get_active_warehouses()
     error = None
 
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
+        title = form_str("title", max_len=200)
         disaster_type = request.form.get("disaster_type", "")
-        description = request.form.get("description", "").strip()
+        description = form_str("description", max_len=1000) or None
         warehouse_id = request.form.get("source_warehouse_id", type=int)
         planned_date_str = request.form.get("planned_date", "").strip()
 
         if not title or not disaster_type or not warehouse_id or not planned_date_str:
             error = "Title, disaster type, source warehouse, and planned date are required."
         else:
-            try:
-                planned_date = datetime.strptime(planned_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                error = "Invalid date format."
-                planned_date = None
+            planned_date = parse_date(planned_date_str)
 
-            if not error:
+            if not planned_date:
+                error = "Invalid date format."
+            else:
                 batch = DistributionBatch(
-                    batch_code=generate_batch_code(),
+                    batch_code=generate_unique_code(
+                        generate_batch_code, DistributionBatch, "batch_code"
+                    ),
                     title=title,
                     disaster_type=disaster_type,
-                    description=description or None,
+                    description=description,
                     source_warehouse_id=warehouse_id,
                     planned_date=planned_date,
                     created_by=current_user.id,
                 )
                 db.session.add(batch)
                 db.session.flush()
-                audit_log("CREATE_BATCH", "DistributionBatch", batch.id,
-                          f"Created distribution batch '{title}' ({batch.batch_code}).")
-                db.session.commit()
+                commit_with_audit(
+                    "CREATE_BATCH", "DistributionBatch", batch.id,
+                    f"Created batch '{title}' ({batch.batch_code}).",
+                )
                 flash(f"Batch '{batch.batch_code}' created.", "success")
                 return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
 
@@ -93,10 +105,14 @@ def create_batch():
 @distribution_bp.route("/<int:batch_id>")
 @login_required
 def batch_detail(batch_id):
-    batch = db.session.get(DistributionBatch, batch_id)
-    if not batch:
-        abort(404)
-    records = batch.records.order_by(DistributionRecord.created_at.desc()).limit(50).all()
+    batch = get_or_404(DistributionBatch, batch_id)
+    records = (
+        DistributionRecord.query
+        .filter_by(batch_id=batch.id)
+        .order_by(DistributionRecord.created_at.desc())
+        .limit(50)
+        .all()
+    )
     return render_template("distribution/batch_detail.html", batch=batch, records=records)
 
 
@@ -108,9 +124,7 @@ def batch_detail(batch_id):
 @login_required
 @roles_required("admin", "programme_coord")
 def update_batch_status(batch_id):
-    batch = db.session.get(DistributionBatch, batch_id)
-    if not batch:
-        abort(404)
+    batch = get_or_404(DistributionBatch, batch_id)
     new_status = request.form.get("status", "")
     valid = ("planned", "in_progress", "completed", "cancelled")
     if new_status not in valid:
@@ -119,34 +133,129 @@ def update_batch_status(batch_id):
         old_status = batch.status
         batch.status = new_status
         if new_status == "in_progress" and not batch.start_date:
-            batch.start_date = datetime.utcnow()
+            batch.start_date = datetime.now(timezone.utc)
         if new_status == "completed" and not batch.end_date:
-            batch.end_date = datetime.utcnow()
-        audit_log("UPDATE_BATCH_STATUS", "DistributionBatch", batch.id,
-                  f"Status changed from '{old_status}' to '{new_status}'.")
-        db.session.commit()
+            batch.end_date = datetime.now(timezone.utc)
+        commit_with_audit(
+            "UPDATE_BATCH_STATUS", "DistributionBatch", batch.id,
+            f"Status changed from '{old_status}' to '{new_status}'.",
+        )
         flash(f"Batch status updated to '{new_status}'.", "success")
     return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
 
 
 # ---------------------------------------------------------------------------
-# Add distribution record
+# Add distribution record — #10 two-step: preview → confirm
 # ---------------------------------------------------------------------------
 
 @distribution_bp.route("/<int:batch_id>/record", methods=["GET", "POST"])
 @login_required
 @roles_required("admin", "programme_coord", "field_officer")
 def add_record(batch_id):
-    batch = db.session.get(DistributionBatch, batch_id)
-    if not batch:
-        abort(404)
+    batch = get_or_404(DistributionBatch, batch_id)
 
     wh = batch.source_warehouse
-    items = wh.inventory_items.filter(InventoryItem.quantity_available > 0).all()
-    states = State.query.order_by(State.name).all()
+    items = (
+        InventoryItem.query
+        .filter_by(warehouse_id=wh.id)
+        .filter(InventoryItem.quantity_available > 0)
+        .all()
+    )
+    states = get_all_states()
+    dist_points = (
+        DistributionPoint.query
+        .filter_by(is_active=True)
+        .order_by(DistributionPoint.name)
+        .all()
+    )
     error = None
 
-    if request.method == "POST":
+    # ── Step 2: confirmation POST ─────────────────────────────────────
+    if request.method == "POST" and request.form.get("confirmed") == "yes":
+        beneficiary_id = request.form.get("beneficiary_id", type=int)
+        item_id = request.form.get("item_id", type=int)
+        quantity = request.form.get("quantity_given", type=float)
+        dp_id = request.form.get("distribution_point_id", type=int)
+        nin_confirmed = request.form.get("nin_confirmed") == "on"
+
+        beneficiary = db.session.get(Beneficiary, beneficiary_id) if beneficiary_id else None
+        dp = db.session.get(DistributionPoint, dp_id) if dp_id else None
+
+        # #6: duplicate guard
+        existing = DistributionRecord.query.filter_by(
+            batch_id=batch.id,
+            beneficiary_id=beneficiary_id,
+            item_id=item_id,
+        ).first()
+        if existing:
+            flash(
+                f"This beneficiary already received that item in batch {batch.batch_code}.",
+                "warning",
+            )
+            return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
+
+        # #7: row-level lock to prevent concurrent overdraw
+        item = (
+            InventoryItem.query
+            .filter_by(id=item_id)
+            .with_for_update()
+            .first()
+        )
+
+        if not item or item.quantity_available < quantity:
+            flash(
+                f"Insufficient stock. Available: {item.quantity_available if item else 0} {item.unit if item else ''}.",
+                "danger",
+            )
+            return redirect(url_for("distribution.add_record", batch_id=batch.id))
+
+        try:
+            record = DistributionRecord(
+                batch_id=batch.id,
+                beneficiary_id=beneficiary.id,
+                household_id=beneficiary.household_id,
+                distribution_point_id=dp.id,
+                item_id=item.id,
+                quantity_given=quantity,
+                nin_confirmed=nin_confirmed,
+                confirmed_by=current_user.id if nin_confirmed else None,
+                distribution_timestamp=datetime.now(timezone.utc),
+                status="completed",
+                recorded_by=current_user.id,
+            )
+            db.session.add(record)
+
+            item.quantity_available -= quantity
+            mv = StockMovement(
+                item_id=item.id,
+                warehouse_id=wh.id,
+                movement_type="dispatch",
+                quantity=quantity,
+                reference_number=batch.batch_code,
+                notes=f"Distribution batch {batch.batch_code}",
+                performed_by=current_user.id,
+                batch_id=batch.id,
+            )
+            db.session.add(mv)
+
+            commit_with_audit(
+                action="RECORD_DISTRIBUTION",
+                entity_type="DistributionRecord",
+                description=(
+                    f"Distributed {quantity} {item.unit} of '{item.item_name}' "
+                    f"to '{beneficiary.full_name}' in batch {batch.batch_code}."
+                ),
+            )
+        except IntegrityError:
+            db.session.rollback()
+            flash("This distribution already exists (duplicate).", "warning")
+            return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
+
+        flash("Distribution recorded successfully.", "success")
+        return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
+
+    # ── Step 1: form → show confirmation preview ──────────────────────
+    if request.method == "POST" and request.form.get("confirmed") != "yes":
         beneficiary_id = request.form.get("beneficiary_id", type=int)
         item_id = request.form.get("item_id", type=int)
         quantity = request.form.get("quantity_given", type=float)
@@ -168,71 +277,39 @@ def add_record(batch_id):
         elif not dp:
             error = "Please select a distribution point."
         else:
-            record = DistributionRecord(
-                batch_id=batch.id,
-                beneficiary_id=beneficiary.id,
-                household_id=beneficiary.household_id,
-                distribution_point_id=dp.id,
-                item_id=item.id,
-                quantity_given=quantity,
-                nin_confirmed=nin_confirmed,
-                confirmed_by=current_user.id if nin_confirmed else None,
-                distribution_timestamp=datetime.utcnow(),
-                status="completed",
-                recorded_by=current_user.id,
-            )
-            db.session.add(record)
-
-            # Deduct from inventory
-            item.quantity_available -= quantity
-            mv = StockMovement(
-                item_id=item.id,
-                warehouse_id=wh.id,
-                movement_type="dispatch",
+            # Show confirmation card (#10)
+            return render_template(
+                "distribution/confirm_record.html",
+                batch=batch,
+                beneficiary=beneficiary,
+                item=item,
                 quantity=quantity,
-                reference_number=batch.batch_code,
-                notes=f"Distribution batch {batch.batch_code}",
-                performed_by=current_user.id,
-                batch_id=batch.id,
+                dp=dp,
+                nin_confirmed=nin_confirmed,
             )
-            db.session.add(mv)
-
-            audit_log(
-                action="RECORD_DISTRIBUTION",
-                entity_type="DistributionRecord",
-                entity_id=None,
-                description=(
-                    f"Distributed {quantity} {item.unit} of '{item.item_name}' "
-                    f"to beneficiary '{beneficiary.full_name}' in batch {batch.batch_code}."
-                ),
-            )
-            db.session.commit()
-            flash("Distribution recorded successfully.", "success")
-            return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
 
     return render_template(
         "distribution/add_record.html",
         batch=batch,
         items=items,
         states=states,
+        dist_points=dist_points,
         error=error,
     )
 
 
 # ---------------------------------------------------------------------------
-# Route optimization
+# Route optimisation
 # ---------------------------------------------------------------------------
 
 @distribution_bp.route("/<int:batch_id>/optimise-route", methods=["GET", "POST"])
 @login_required
 @roles_required("admin", "logistics", "programme_coord")
 def optimise_route(batch_id):
-    batch = db.session.get(DistributionBatch, batch_id)
-    if not batch:
-        abort(404)
+    batch = get_or_404(DistributionBatch, batch_id)
 
     wh = batch.source_warehouse
-    states = State.query.order_by(State.name).all()
+    states = get_all_states()
     optimized_result = None
     error = None
 
@@ -251,11 +328,12 @@ def optimise_route(batch_id):
             result = optimise_route_for_points(wh, points)
             optimized_result = result
 
-            # Save action — create / replace route
-            route_code = generate_route_code()
+            route_code = generate_unique_code(
+                generate_route_code, DeliveryRoute, "route_code"
+            )
             route = DeliveryRoute(
                 route_code=route_code,
-                name=f"Route for {batch.batch_code}",
+                name=f"Route for {batch.batch_code}"[:150],
                 origin_warehouse_id=wh.id,
                 total_distance_km=result["total_distance_km"],
                 status="draft",
@@ -274,13 +352,14 @@ def optimise_route(batch_id):
                 db.session.add(rs)
 
             batch.route_id = route.id
-            audit_log("OPTIMISE_ROUTE", "DeliveryRoute", route.id,
-                      f"Generated route {route_code} for batch {batch.batch_code}. "
-                      f"Total: {result['total_distance_km']} km.")
-            db.session.commit()
+            commit_with_audit(
+                "OPTIMISE_ROUTE", "DeliveryRoute", route.id,
+                f"Route {route_code} for batch {batch.batch_code}. "
+                f"Total: {result['total_distance_km']} km.",
+            )
             flash(
                 f"Route optimised: {result['total_distance_km']:.1f} km over "
-                f"{len(result['ordered_stops'])} stops. Route code: {route_code}.",
+                f"{len(result['ordered_stops'])} stops. Code: {route_code}.",
                 "success",
             )
 
@@ -300,7 +379,18 @@ def optimise_route(batch_id):
 
 
 # ---------------------------------------------------------------------------
-# Beneficiary lookup (AJAX for distribution form)
+# Route detail view  (#15)
+# ---------------------------------------------------------------------------
+
+@distribution_bp.route("/routes/<int:route_id>")
+@login_required
+def route_detail(route_id):
+    route = get_or_404(DeliveryRoute, route_id)
+    return render_template("distribution/route_detail.html", route=route)
+
+
+# ---------------------------------------------------------------------------
+# Beneficiary lookup (AJAX)
 # ---------------------------------------------------------------------------
 
 @distribution_bp.route("/lookup-beneficiary")
@@ -309,14 +399,4 @@ def lookup_beneficiary():
     nin = request.args.get("nin", "").strip()
     if not nin:
         return jsonify({"found": False})
-    b = Beneficiary.query.filter_by(nin=nin, status="active").first()
-    if not b:
-        return jsonify({"found": False, "message": "No active beneficiary found with that NIN."})
-    return jsonify({
-        "found": True,
-        "id": b.id,
-        "full_name": b.full_name,
-        "nin_verified": b.nin_verified,
-        "masked_nin": b.masked_nin,
-        "lga": b.lga.name if b.lga else "",
-    })
+    return jsonify(beneficiary_nin_lookup(nin))

@@ -9,6 +9,8 @@ from app import db
 from app.models.zone import State, LocalGovernmentArea, DistributionPoint
 from app.models.inventory import Warehouse, InventoryItem
 from app.models.beneficiary import Beneficiary
+from app.models.distribution import DistributionRecord
+from app.utils.helpers import beneficiary_nin_lookup
 
 api_bp = Blueprint("api", __name__)
 
@@ -81,11 +83,7 @@ def beneficiary_lookup():
     name = request.args.get("name", "").strip()
 
     if nin:
-        b = Beneficiary.query.filter_by(nin=nin, status="active").first()
-        if b:
-            return jsonify({"found": True, "id": b.id, "full_name": b.full_name,
-                            "nin_verified": b.nin_verified, "lga": b.lga.name if b.lga else ""})
-        return jsonify({"found": False})
+        return jsonify(beneficiary_nin_lookup(nin))
 
     if name:
         like = f"%{name}%"
@@ -112,11 +110,20 @@ def beneficiary_lookup():
 @api_bp.route("/dashboard/stats")
 @login_required
 def dashboard_stats():
-    from app.models.distribution import DistributionRecord
     total_b = Beneficiary.query.filter_by(status="active").count()
     completed_d = DistributionRecord.query.filter_by(status="completed").count()
-    all_items = InventoryItem.query.all()
-    low_stock = sum(1 for i in all_items if i.is_low_stock)
+    low_stock = (
+        InventoryItem.query
+        .filter(
+            db.or_(
+                InventoryItem.quantity_available <= 0,
+                db.and_(
+                    InventoryItem.minimum_threshold > 0,
+                    InventoryItem.quantity_available <= InventoryItem.minimum_threshold,
+                ),
+            )
+        ).count()
+    )
     return jsonify({
         "total_beneficiaries": total_b,
         "completed_distributions": completed_d,

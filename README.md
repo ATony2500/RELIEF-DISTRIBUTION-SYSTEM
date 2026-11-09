@@ -30,6 +30,7 @@ The NRDS is a full-stack web application that digitises Nigeria's relief distrib
 | Database | MySQL 8.0 (via PyMySQL) |
 | Authentication | Flask-Login + Flask-Bcrypt |
 | Migrations | Flask-Migrate (Alembic) |
+| Front-end styling | Tailwind CSS 3.x (compiled) |
 | Front-end | HTML5, CSS3, JavaScript (no heavy framework) |
 
 ---
@@ -64,8 +65,12 @@ RELIEF-DISTRIBUTION-SYSTEM/
 │   │   ├── decorators.py    # RBAC decorators
 │   │   └── helpers.py       # Misc helpers
 │   ├── templates/           # Jinja2 HTML templates
-│   └── static/              # CSS, JS, images
+│   └── static/              # CSS (compiled), JS, images
+├── src/
+│   └── input.css            # Tailwind CSS source
 ├── config.py                # Configuration classes
+├── tailwind.config.js       # Tailwind config (theme, safelist)
+├── package.json             # Node scripts (build:css, watch:css)
 ├── run.py                   # Development entry point
 ├── seed.py                  # Database seeder
 └── requirements.txt
@@ -108,21 +113,32 @@ DATABASE_URL=mysql+pymysql://root:yourpassword@localhost/nrds_db
 
 ```bash
 pip install -r requirements.txt
+npm install
 ```
 
-### 5. Create tables
+### 5. Build the CSS
+
+The styles are written in Tailwind CSS (`src/input.css`) and compiled to
+`app/static/css/style.css`.  Rebuild after changing the source:
+
+```bash
+npm run build:css       # one-off production build (minified)
+npm run watch:css       # watch mode during development
+```
+
+### 6. Create tables
 
 ```bash
 python -c "from app import create_app, db; app = create_app(); ctx = app.app_context(); ctx.push(); db.create_all()"
 ```
 
-### 6. Seed the database
+### 7. Seed the database
 
 ```bash
 python seed.py
 ```
 
-### 7. Run the application
+### 8. Run the application
 
 ```bash
 python run.py

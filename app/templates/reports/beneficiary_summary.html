@@ -5,7 +5,10 @@
 {% block content %}
 <div class="page-header">
   <h2>Beneficiary Summary</h2>
-  <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+  <div>
+    <a href="{{ url_for('reports.export_beneficiary_summary') }}" class="btn btn-outline">⬇ Export CSV</a>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+  </div>
 </div>
 
 <div class="stats-grid">

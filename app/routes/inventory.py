@@ -2,17 +2,17 @@
 Inventory management routes — warehouses, items, stock movements.
 """
 
-from datetime import datetime
 from flask import (
     Blueprint, render_template, redirect, url_for,
-    flash, request, abort,
+    flash, request,
 )
 from flask_login import login_required, current_user
 from app import db
 from app.models.inventory import InventoryItem, Warehouse, StockMovement
-from app.models.zone import State
-from app.utils.audit import audit_log
-from app.utils.helpers import paginate_query
+from app.utils.helpers import (
+    paginate_query, get_or_404, parse_date, form_str,
+    get_all_states, get_active_warehouses, commit_with_audit,
+)
 from app.utils.decorators import roles_required
 
 inventory_bp = Blueprint("inventory", __name__)
@@ -34,19 +34,19 @@ def warehouses():
 @login_required
 @roles_required("admin", "warehouse")
 def create_warehouse():
-    states = State.query.order_by(State.name).all()
+    states = get_all_states()
     error = None
 
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        code = request.form.get("code", "").strip().upper()
-        address = request.form.get("address", "").strip()
+        name = form_str("name")
+        code = form_str("code").upper()
+        address = form_str("address")
         state_id = request.form.get("state_id", type=int)
         latitude = request.form.get("latitude", type=float)
         longitude = request.form.get("longitude", type=float)
         capacity = request.form.get("capacity_tonnes", type=float)
-        manager_name = request.form.get("manager_name", "").strip()
-        manager_phone = request.form.get("manager_phone", "").strip()
+        manager_name = form_str("manager_name")
+        manager_phone = form_str("manager_phone")
 
         if not name or not code or not state_id:
             error = "Name, code, and state are required."
@@ -61,9 +61,10 @@ def create_warehouse():
             )
             db.session.add(wh)
             db.session.flush()
-            audit_log("CREATE_WAREHOUSE", "Warehouse", wh.id,
-                      f"Created warehouse '{name}' ({code}).")
-            db.session.commit()
+            commit_with_audit(
+                "CREATE_WAREHOUSE", "Warehouse", wh.id,
+                f"Created warehouse '{name}' ({code}).",
+            )
             flash(f"Warehouse '{name}' created.", "success")
             return redirect(url_for("inventory.warehouses"))
 
@@ -73,14 +74,40 @@ def create_warehouse():
 @inventory_bp.route("/warehouses/<int:wh_id>")
 @login_required
 def warehouse_detail(wh_id):
-    wh = db.session.get(Warehouse, wh_id)
-    if not wh:
-        abort(404)
-    items = wh.inventory_items.order_by(InventoryItem.item_name).all()
-    low_stock = [i for i in items if i.is_low_stock]
+    wh = get_or_404(Warehouse, wh_id)
+    page = request.args.get("page", 1, type=int)
+    category = request.args.get("category", "").strip()
+    search = request.args.get("q", "").strip()[:100]
+
+    q = InventoryItem.query.filter_by(warehouse_id=wh_id)
+    if category:
+        q = q.filter_by(category=category)
+    if search:
+        q = q.filter(InventoryItem.item_name.ilike(f"%{search}%"))
+
+    # Paginated list
+    items_page = paginate_query(q.order_by(InventoryItem.item_name), page)
+
+    # Low-stock items — DB-level filter (no full table load)
+    low_stock = (
+        q.filter(
+            db.or_(
+                InventoryItem.quantity_available <= 0,
+                db.and_(
+                    InventoryItem.minimum_threshold > 0,
+                    InventoryItem.quantity_available <= InventoryItem.minimum_threshold,
+                ),
+            )
+        ).all()
+    )
+
     return render_template(
         "inventory/warehouse_detail.html",
-        warehouse=wh, items=items, low_stock=low_stock,
+        warehouse=wh,
+        items=items_page,
+        low_stock=low_stock,
+        category=category,
+        search=search,
     )
 
 
@@ -102,12 +129,20 @@ def item_list():
         query = query.filter_by(warehouse_id=wh_id)
     if category:
         query = query.filter_by(category=category)
+    if low_only:
+        query = query.filter(
+            db.or_(
+                InventoryItem.quantity_available <= 0,
+                db.and_(
+                    InventoryItem.minimum_threshold > 0,
+                    InventoryItem.quantity_available <= InventoryItem.minimum_threshold,
+                ),
+            )
+        )
 
     all_items = query.order_by(InventoryItem.item_name).all()
-    if low_only:
-        all_items = [i for i in all_items if i.is_low_stock]
 
-    warehouses = Warehouse.query.filter_by(is_active=True).order_by(Warehouse.name).all()
+    warehouses = get_active_warehouses()
 
     return render_template(
         "inventory/items.html",
@@ -123,31 +158,25 @@ def item_list():
 @login_required
 @roles_required("admin", "warehouse")
 def add_item():
-    warehouses = Warehouse.query.filter_by(is_active=True).order_by(Warehouse.name).all()
+    warehouses = get_active_warehouses()
     error = None
 
     if request.method == "POST":
         warehouse_id = request.form.get("warehouse_id", type=int)
-        item_name = request.form.get("item_name", "").strip()
+        item_name = form_str("item_name")
         category = request.form.get("category", "")
-        unit = request.form.get("unit", "units").strip()
+        unit = form_str("unit", default="units")
         quantity = request.form.get("quantity_available", 0.0, type=float)
         threshold = request.form.get("minimum_threshold", 0.0, type=float)
-        donor = request.form.get("donor", "").strip()
-        batch_number = request.form.get("batch_number", "").strip()
+        donor = form_str("donor") or None
+        batch_number = form_str("batch_number") or None
         expiry_str = request.form.get("expiry_date", "").strip()
-        notes = request.form.get("notes", "").strip()
+        notes = form_str("notes") or None
+        expiry = parse_date(expiry_str)
 
         if not warehouse_id or not item_name or not category:
             error = "Warehouse, item name, and category are required."
         else:
-            expiry = None
-            if expiry_str:
-                try:
-                    expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-                except ValueError:
-                    pass
-
             item = InventoryItem(
                 warehouse_id=warehouse_id,
                 item_name=item_name,
@@ -155,10 +184,10 @@ def add_item():
                 unit=unit,
                 quantity_available=quantity,
                 minimum_threshold=threshold,
-                donor=donor or None,
-                batch_number=batch_number or None,
+                donor=donor,
+                batch_number=batch_number,
                 expiry_date=expiry,
-                notes=notes or None,
+                notes=notes,
             )
             db.session.add(item)
             db.session.flush()
@@ -175,9 +204,10 @@ def add_item():
                 )
                 db.session.add(mv)
 
-            audit_log("ADD_INVENTORY_ITEM", "InventoryItem", item.id,
-                      f"Added item '{item_name}' ({quantity} {unit}) to warehouse ID {warehouse_id}.")
-            db.session.commit()
+            commit_with_audit(
+                "ADD_INVENTORY_ITEM", "InventoryItem", item.id,
+                f"Added item '{item_name}' ({quantity} {unit}) to warehouse ID {warehouse_id}.",
+            )
             flash(f"Item '{item_name}' added to inventory.", "success")
             return redirect(url_for("inventory.item_list"))
 
@@ -192,16 +222,14 @@ def add_item():
 @login_required
 @roles_required("admin", "warehouse")
 def stock_movement(item_id):
-    item = db.session.get(InventoryItem, item_id)
-    if not item:
-        abort(404)
+    item = get_or_404(InventoryItem, item_id)
     error = None
 
     if request.method == "POST":
         movement_type = request.form.get("movement_type", "")
         quantity = request.form.get("quantity", 0.0, type=float)
-        reference = request.form.get("reference_number", "").strip()
-        notes = request.form.get("notes", "").strip()
+        reference = form_str("reference_number") or None
+        notes = form_str("notes") or None
 
         valid_types = ("receipt", "dispatch", "transfer_in", "transfer_out", "adjustment", "loss")
         if movement_type not in valid_types:
@@ -224,18 +252,17 @@ def stock_movement(item_id):
                     warehouse_id=item.warehouse_id,
                     movement_type=movement_type,
                     quantity=quantity,
-                    reference_number=reference or None,
-                    notes=notes or None,
+                    reference_number=reference,
+                    notes=notes,
                     performed_by=current_user.id,
                 )
                 db.session.add(mv)
-                audit_log(
+                commit_with_audit(
                     action="STOCK_MOVEMENT",
                     entity_type="InventoryItem",
                     entity_id=item.id,
                     description=f"{movement_type.upper()} {quantity} {item.unit} of '{item.item_name}'.",
                 )
-                db.session.commit()
                 flash(f"Stock movement recorded. New balance: {item.quantity_available} {item.unit}.", "success")
                 return redirect(url_for("inventory.warehouse_detail", wh_id=item.warehouse_id))
 

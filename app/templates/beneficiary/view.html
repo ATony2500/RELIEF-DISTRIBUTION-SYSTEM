@@ -65,6 +65,14 @@
         <div class="mt-3">
           <strong>Household:</strong> {{ beneficiary.household.household_code }}
           ({{ beneficiary.household.household_size }} members)
+          {% if household_members %}
+            <ul class="mt-2 text-sm">
+              {% for m in household_members %}
+                <li><a href="{{ url_for('beneficiary.view', beneficiary_id=m.id) }}">{{ m.full_name }}</a>
+                  <span class="text-muted">— {{ m.gender }}, {{ m.masked_nin }}</span></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
         </div>
       {% endif %}
     </div>

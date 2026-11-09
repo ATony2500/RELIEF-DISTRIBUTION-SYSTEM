@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Add Inventory Item{% endblock %}
 {% block page_title %}Add Inventory Item{% endblock %}
 
@@ -12,6 +12,7 @@
 <div class="card" style="max-width:680px;">
   <div class="card-body">
     <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <div class="form-row">
         <div class="form-group">
           <label>Warehouse <span class="required">*</span></label>
@@ -76,3 +77,4 @@
   </div>
 </div>
 {% endblock %}
+

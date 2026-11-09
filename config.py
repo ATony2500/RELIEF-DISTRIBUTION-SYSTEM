@@ -1,19 +1,19 @@
 """
-NRDS Configuration Module
-Defines application configuration classes for different environments.
+NRDS Configuration Module.
+Improvement #3:  Secure session cookie settings.
+Improvement #20: Logging configuration.
 """
 
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
-    """Base configuration shared across all environments."""
+    """Base configuration."""
 
     SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-secret-key-change-in-production"
 
@@ -34,11 +34,15 @@ class Config:
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_USERNAME", "noreply@nrds.gov.ng")
 
-    # Pagination
-    ITEMS_PER_PAGE = 20
+    # CSRF (#1)
+    WTF_CSRF_ENABLED = True
+    WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
 
-    # Low-stock threshold (percentage)
-    LOW_STOCK_THRESHOLD = 20
+    # Session cookie security (#3)
+    SESSION_COOKIE_HTTPONLY = True      # JS cannot read session cookie
+    SESSION_COOKIE_SAMESITE = "Lax"    # CSRF protection
+    SESSION_COOKIE_SECURE = False       # Set True in production (requires HTTPS)
+    PERMANENT_SESSION_LIFETIME = 28800  # 8 hours
 
     # Application metadata
     APP_NAME = "National Relief Distribution System"
@@ -49,29 +53,30 @@ class Config:
     # NIN length
     NIN_LENGTH = 11
 
+    # Logging (#20)
+    LOG_DIR = os.path.join(BASE_DIR, "logs")
+    LOG_MAX_BYTES = 5 * 1024 * 1024   # 5 MB per file
+    LOG_BACKUP_COUNT = 5
+
 
 class DevelopmentConfig(Config):
-    """Development environment configuration."""
     DEBUG = True
-    SQLALCHEMY_ECHO = False  # Set True to log all SQL queries
+    SQLALCHEMY_ECHO = False
 
 
 class ProductionConfig(Config):
-    """Production environment configuration."""
     DEBUG = False
     SQLALCHEMY_ECHO = False
-    # In production, SECRET_KEY must come from environment
     SECRET_KEY = os.environ.get("SECRET_KEY")
+    SESSION_COOKIE_SECURE = True   # Enforce HTTPS in production
 
 
 class TestingConfig(Config):
-    """Testing environment configuration."""
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
 
 
-# Config map for easy selection
 config_map = {
     "development": DevelopmentConfig,
     "production": ProductionConfig,

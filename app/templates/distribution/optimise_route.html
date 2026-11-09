@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Optimise Route{% endblock %}
 {% block page_title %}Route Optimisation{% endblock %}
 
@@ -24,6 +24,7 @@
 {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
 
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <div class="card-grid">
     <div class="card">
       <div class="card-header"><h3>Select Distribution Points</h3></div>
@@ -100,3 +101,4 @@ document.getElementById('stateFilter').addEventListener('change', function() {
 });
 </script>
 {% endblock %}
+

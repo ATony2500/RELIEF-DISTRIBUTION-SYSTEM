@@ -1,18 +1,13 @@
 """
-User model — accounts, roles, and authentication.
-
-Roles (RBAC):
-  admin           – full system access
-  programme_coord – manages distributions and beneficiaries
-  warehouse       – manages inventory and stock movements
-  field_officer   – registers beneficiaries, records distributions
-  logistics       – manages routes and deliveries
-  partner         – read-only partner organisation access
+User model.
+Improvement #4:  Password strength validation helper.
+Improvement #17: timezone-aware datetimes.
+Improvement #22: Index on username, email, role.
 """
 
-from datetime import datetime
 from flask_login import UserMixin
 from app import db, login_manager, bcrypt
+from app.utils.helpers import utc_now
 
 
 class User(UserMixin, db.Model):
@@ -25,22 +20,19 @@ class User(UserMixin, db.Model):
     full_name = db.Column(db.String(120), nullable=False)
     role = db.Column(
         db.Enum(
-            "admin",
-            "programme_coord",
-            "warehouse",
-            "field_officer",
-            "logistics",
-            "partner",
+            "admin", "programme_coord", "warehouse",
+            "field_officer", "logistics", "partner",
             name="user_role_enum",
         ),
         nullable=False,
         default="field_officer",
+        index=True,
     )
     phone = db.Column(db.String(20))
     organisation = db.Column(db.String(120))
     state_id = db.Column(db.Integer, db.ForeignKey("states.id"), nullable=True)
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
     last_login = db.Column(db.DateTime)
 
     # Relationships
@@ -54,15 +46,27 @@ class User(UserMixin, db.Model):
     )
 
     # ------------------------------------------------------------------
-    # Password helpers
+    # Password helpers (#4 — strength validation)
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def validate_password_strength(password: str) -> str | None:
+        """
+        Return an error message if the password is too weak, else None.
+        Rules: min 8 chars, at least one digit, at least one non-alphanumeric char.
+        """
+        if len(password) < 8:
+            return "Password must be at least 8 characters."
+        if not any(c.isdigit() for c in password):
+            return "Password must contain at least one number."
+        if all(c.isalnum() for c in password):
+            return "Password must contain at least one special character (e.g. @, #, !)."
+        return None
+
     def set_password(self, password: str) -> None:
-        """Hash and store a plaintext password."""
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
     def check_password(self, password: str) -> bool:
-        """Return True if plaintext password matches stored hash."""
         return bcrypt.check_password_hash(self.password_hash, password)
 
     # ------------------------------------------------------------------
@@ -73,31 +77,10 @@ class User(UserMixin, db.Model):
     def is_admin(self) -> bool:
         return self.role == "admin"
 
-    @property
-    def is_warehouse_staff(self) -> bool:
-        return self.role in ("admin", "warehouse")
-
-    @property
-    def is_field_officer(self) -> bool:
-        return self.role in ("admin", "field_officer", "programme_coord")
-
-    @property
-    def is_logistics(self) -> bool:
-        return self.role in ("admin", "logistics")
-
-    @property
-    def can_view_reports(self) -> bool:
-        return self.role in ("admin", "programme_coord", "partner")
-
-    # ------------------------------------------------------------------
-    # Dunder
-    # ------------------------------------------------------------------
-
     def __repr__(self) -> str:
         return f"<User {self.username} [{self.role}]>"
 
 
 @login_manager.user_loader
 def load_user(user_id: str):
-    """Flask-Login callback to reload user from session."""
     return db.session.get(User, int(user_id))

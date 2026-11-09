@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Confirm Distribution{% endblock %}
+{% block page_title %}Confirm Distribution{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Confirm Distribution</h2>
+  <a href="{{ url_for('distribution.add_record', batch_id=batch.id) }}" class="btn btn-outline">← Back</a>
+</div>
+
+<div class="card" style="max-width:600px;">
+  <div class="card-header">
+    <h3>⚠️ Please review before confirming</h3>
+  </div>
+  <div class="card-body">
+    <dl class="detail-list">
+      <dt>Batch</dt>
+      <dd><code>{{ batch.batch_code }}</code> — {{ batch.title }}</dd>
+
+      <dt>Beneficiary</dt>
+      <dd>
+        <strong>{{ beneficiary.full_name }}</strong><br />
+        <span class="text-muted">NIN: {{ beneficiary.masked_nin }}</span>
+        {% if not beneficiary.nin_verified %}
+          <span class="badge badge-warning ml-2">NIN Unverified</span>
+        {% endif %}
+      </dd>
+
+      <dt>Item</dt>
+      <dd>{{ item.item_name }} <span class="text-muted">({{ item.category }})</span></dd>
+
+      <dt>Quantity</dt>
+      <dd><strong>{{ quantity }} {{ item.unit }}</strong></dd>
+
+      <dt>Distribution Point</dt>
+      <dd>{{ dp.name }}</dd>
+
+      <dt>NIN Confirmed at Point</dt>
+      <dd>{% if nin_confirmed %}✅ Yes{% else %}❌ No{% endif %}</dd>
+
+      <dt>Stock After This Distribution</dt>
+      <dd class="{% if item.quantity_available - quantity <= item.minimum_threshold %}text-danger{% endif %}">
+        {{ item.quantity_available - quantity }} {{ item.unit }}
+        {% if item.quantity_available - quantity <= item.minimum_threshold %}
+          <span class="badge badge-warning ml-2">Will trigger low-stock alert</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+  <div class="card-footer">
+    <form method="POST" action="{{ url_for('distribution.add_record', batch_id=batch.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="confirmed" value="yes" />
+      <input type="hidden" name="beneficiary_id" value="{{ beneficiary.id }}" />
+      <input type="hidden" name="item_id" value="{{ item.id }}" />
+      <input type="hidden" name="quantity_given" value="{{ quantity }}" />
+      <input type="hidden" name="distribution_point_id" value="{{ dp.id }}" />
+      <input type="hidden" name="nin_confirmed" value="{{ 'on' if nin_confirmed else 'off' }}" />
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-lg">✅ Confirm &amp; Record</button>
+        <a href="{{ url_for('distribution.add_record', batch_id=batch.id) }}" class="btn btn-outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Add Distribution Record{% endblock %}
 {% block page_title %}Add Distribution Record{% endblock %}
 
@@ -10,6 +10,7 @@
 {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
 
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <div class="card-grid">
     <div class="card">
       <div class="card-header"><h3>Beneficiary Lookup</h3></div>
@@ -52,6 +53,9 @@
           <label>Distribution Point <span class="required">*</span></label>
           <select name="distribution_point_id" id="dist_point" class="form-control" required>
             <option value="">Select point…</option>
+            {% for dp in dist_points %}
+              <option value="{{ dp.id }}" data-state-id="{{ dp.lga.state_id }}">{{ dp.name }} — {{ dp.lga.name }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="form-group">
@@ -78,57 +82,4 @@
     <a href="{{ url_for('distribution.batch_detail', batch_id=batch.id) }}" class="btn btn-outline">Cancel</a>
   </div>
 </form>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-// Beneficiary NIN lookup
-document.getElementById('lookupBtn').addEventListener('click', function() {
-  const nin = document.getElementById('ninSearch').value.trim();
-  const result = document.getElementById('lookupResult');
-  if (!/^\d{11}$/.test(nin)) {
-    result.innerHTML = '<span class="text-danger">Enter a valid 11-digit NIN.</span>';
-    return;
-  }
-  result.innerHTML = '<span class="text-muted">Searching…</span>';
-  fetch(`/distribution/lookup-beneficiary?nin=${nin}`)
-    .then(r => r.json())
-    .then(data => {
-      if (data.found) {
-        document.getElementById('beneficiary_id').value = data.id;
-        document.getElementById('bName').textContent = data.full_name;
-        document.getElementById('bExtra').textContent = `NIN: ${data.masked_nin} | LGA: ${data.lga} | Verified: ${data.nin_verified ? 'Yes' : 'No'}`;
-        document.getElementById('beneficiaryInfo').classList.remove('hidden');
-        result.innerHTML = '';
-      } else {
-        result.innerHTML = `<span class="text-danger">${data.message || 'Beneficiary not found.'}</span>`;
-        document.getElementById('beneficiaryInfo').classList.add('hidden');
-        document.getElementById('beneficiary_id').value = '';
-      }
-    });
-});
-
-// Load distribution points by state
-document.getElementById('stateSelect').addEventListener('change', function() {
-  const stateId = this.value;
-  const dpSelect = document.getElementById('dist_point');
-  dpSelect.innerHTML = '<option>Loading…</option>';
-  if (!stateId) { dpSelect.innerHTML = '<option value="">Select point…</option>'; return; }
-  fetch(`/api/states/${stateId}/lgas`)
-    .then(r => r.json())
-    .then(lgas => {
-      const promises = lgas.map(l => fetch(`/api/lgas/${l.id}/distribution-points`).then(r => r.json()));
-      return Promise.all(promises);
-    })
-    .then(results => {
-      dpSelect.innerHTML = '<option value="">Select point…</option>';
-      results.flat().forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.textContent = p.name;
-        dpSelect.appendChild(opt);
-      });
-    });
-});
-</script>
 {% endblock %}

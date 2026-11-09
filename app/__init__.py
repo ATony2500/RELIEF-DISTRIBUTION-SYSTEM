@@ -1,7 +1,13 @@
 """
-NRDS Application Factory
-Initializes Flask app and all extensions using the application factory pattern.
+NRDS Application Factory.
+Improvement #1:  CSRF protection via Flask-WTF CSRFProtect.
+Improvement #2:  Rate limiting via Flask-Limiter.
+Improvement #20: Rotating file handler logging.
 """
+
+import os
+import logging
+from logging.handlers import RotatingFileHandler
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -9,40 +15,49 @@ from flask_migrate import Migrate
 from flask_login import LoginManager
 from flask_bcrypt import Bcrypt
 from flask_mail import Mail
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from config import get_config
 
-# Extension instances (not yet bound to an app)
+# Extension instances
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 bcrypt = Bcrypt()
 mail = Mail()
+csrf = CSRFProtect()
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 
 def create_app(config_class=None):
-    """Application factory function."""
+    """Application factory."""
 
     app = Flask(__name__, instance_relative_config=True)
 
-    # Load configuration
     if config_class is None:
         config_class = get_config()
     app.config.from_object(config_class)
 
-    # Initialize extensions
+    # Ensure logs directory exists (#20)
+    log_dir = app.config.get("LOG_DIR", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+
+    # ── Extensions ────────────────────────────────────────────────────
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     bcrypt.init_app(app)
     mail.init_app(app)
+    csrf.init_app(app)        # #1 CSRF
+    limiter.init_app(app)     # #2 Rate limiting
 
-    # Login manager settings
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Please log in to access this page."
     login_manager.login_message_category = "warning"
 
-    # Register blueprints
+    # ── Blueprints ────────────────────────────────────────────────────
     from app.routes.auth import auth_bp
     from app.routes.main import main_bp
     from app.routes.admin import admin_bp
@@ -61,17 +76,52 @@ def create_app(config_class=None):
     app.register_blueprint(reports_bp, url_prefix="/reports")
     app.register_blueprint(api_bp, url_prefix="/api")
 
-    # Register error handlers
+    # ── Error handlers ────────────────────────────────────────────────
     from app.routes.errors import register_error_handlers
     register_error_handlers(app)
 
-    # Register custom Jinja2 filters
+    # ── Custom Jinja2 filters ─────────────────────────────────────────
     @app.template_filter("format_number")
     def format_number_filter(value):
-        """Format an integer with thousands separators."""
         try:
             return f"{int(value):,}"
         except (ValueError, TypeError):
             return value
 
+    # ── Logging (#20) ─────────────────────────────────────────────────
+    if not app.debug:
+        _setup_logging(app, log_dir)
+
     return app
+
+
+def _setup_logging(app, log_dir):
+    """Configure rotating file logger for production use."""
+    max_bytes = app.config.get("LOG_MAX_BYTES", 5 * 1024 * 1024)
+    backup_count = app.config.get("LOG_BACKUP_COUNT", 5)
+
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
+    )
+
+    # Application log
+    app_handler = RotatingFileHandler(
+        os.path.join(log_dir, "nrds.log"),
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+    )
+    app_handler.setFormatter(formatter)
+    app_handler.setLevel(logging.WARNING)
+
+    # Error-only log
+    error_handler = RotatingFileHandler(
+        os.path.join(log_dir, "nrds_errors.log"),
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+    )
+    error_handler.setFormatter(formatter)
+    error_handler.setLevel(logging.ERROR)
+
+    app.logger.addHandler(app_handler)
+    app.logger.addHandler(error_handler)
+    app.logger.setLevel(logging.WARNING)

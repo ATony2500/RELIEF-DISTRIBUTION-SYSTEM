@@ -1,5 +1,6 @@
 """
-Main routes — dashboard and home.
+Main routes — dashboard.
+Improvement #21: Low-stock query done at DB level, not Python filter.
 """
 
 from flask import Blueprint, render_template, redirect, url_for
@@ -23,17 +24,27 @@ def index():
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
-    # --- Summary statistics ---
     total_beneficiaries = Beneficiary.query.filter_by(status="active").count()
     total_warehouses = Warehouse.query.filter_by(is_active=True).count()
     active_batches = DistributionBatch.query.filter_by(status="in_progress").count()
     completed_distributions = DistributionRecord.query.filter_by(status="completed").count()
 
-    # Low-stock items
-    all_items = InventoryItem.query.all()
-    low_stock_items = [item for item in all_items if item.is_low_stock]
+    # #21: database-level low stock filter — no full table scan
+    low_stock_items = (
+        InventoryItem.query
+        .filter(
+            db.or_(
+                InventoryItem.quantity_available <= 0,
+                db.and_(
+                    InventoryItem.minimum_threshold > 0,
+                    InventoryItem.quantity_available <= InventoryItem.minimum_threshold,
+                ),
+            )
+        )
+        .order_by(InventoryItem.quantity_available)
+        .all()
+    )
 
-    # Recent audit entries (last 10)
     recent_logs = (
         AuditLog.query
         .order_by(AuditLog.timestamp.desc())
@@ -41,7 +52,6 @@ def dashboard():
         .all()
     )
 
-    # Recent distributions (last 5 batches)
     recent_batches = (
         DistributionBatch.query
         .order_by(DistributionBatch.created_at.desc())

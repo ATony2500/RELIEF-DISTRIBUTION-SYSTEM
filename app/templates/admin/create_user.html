@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Create User{% endblock %}
 {% block page_title %}Create User{% endblock %}
 
@@ -12,6 +12,7 @@
 <div class="card" style="max-width:680px;">
   <div class="card-body">
     <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <div class="form-row">
         <div class="form-group">
           <label>Username <span class="required">*</span></label>
@@ -76,3 +77,4 @@
   </div>
 </div>
 {% endblock %}
+

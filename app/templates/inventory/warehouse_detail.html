@@ -14,7 +14,7 @@
 <div class="card-grid mb-3">
   <div class="stat-card stat-blue">
     <div class="stat-icon">📦</div>
-    <div class="stat-value">{{ items | length }}</div>
+    <div class="stat-value">{{ warehouse.inventory_items.count() }}</div>
     <div class="stat-label">Item Types</div>
   </div>
   <div class="stat-card {% if low_stock %}stat-red{% else %}stat-green{% endif %}">
@@ -29,34 +29,48 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <h3>Inventory Items</h3>
-    <div class="filter-tabs">
-      <a href="?" class="filter-tab active">All</a>
-      <a href="?category=Food" class="filter-tab">Food</a>
-      <a href="?category=Medicine" class="filter-tab">Medicine</a>
-      <a href="?category=Shelter" class="filter-tab">Shelter</a>
-      <a href="?category=Water" class="filter-tab">Water</a>
-    </div>
+<!-- Search / filter (#9 + #11) -->
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" class="filter-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Search Item</label>
+          <input type="text" name="q" class="form-control" value="{{ search }}" placeholder="Item name…" />
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select name="category" class="form-control">
+            <option value="">All</option>
+            {% for cat in ['Food','Water','Medicine','Shelter','Clothing','Hygiene','Other'] %}
+              <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group align-end">
+          <button type="submit" class="btn btn-primary">🔍 Filter</button>
+          <a href="{{ url_for('inventory.warehouse_detail', wh_id=warehouse.id) }}" class="btn btn-outline">Clear</a>
+        </div>
+      </div>
+    </form>
   </div>
+</div>
+
+<div class="card">
   <div class="card-body p-0">
     <table class="table">
       <thead>
         <tr>
-          <th>Item Name</th>
-          <th>Category</th>
-          <th>Available</th>
-          <th>Threshold</th>
-          <th>Stock Level</th>
-          <th>Expiry</th>
-          <th></th>
+          <th>Item Name</th><th>Category</th><th>Available</th>
+          <th>Threshold</th><th>Stock Level</th><th>Expiry</th><th></th>
         </tr>
       </thead>
       <tbody>
-        {% for item in items %}
+        {% for item in items.items %}
         <tr class="{% if item.is_low_stock %}row-warning{% endif %}">
-          <td><strong>{{ item.item_name }}</strong>{% if item.donor %}<br><small class="text-muted">Donor: {{ item.donor }}</small>{% endif %}</td>
+          <td><strong>{{ item.item_name }}</strong>
+            {% if item.donor %}<br><small class="text-muted">Donor: {{ item.donor }}</small>{% endif %}
+          </td>
           <td><span class="badge badge-category-{{ item.category | lower }}">{{ item.category }}</span></td>
           <td>
             <strong class="{% if item.is_low_stock %}text-danger{% endif %}">
@@ -79,10 +93,22 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="text-center text-muted py-4">No items in this warehouse.</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-4">No items match your filter.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% if items.pages > 1 %}
+<div class="pagination mt-3">
+  {% if items.has_prev %}
+    <a href="{{ url_for('inventory.warehouse_detail', wh_id=warehouse.id, page=items.prev_num, category=category, q=search) }}" class="btn btn-outline">← Prev</a>
+  {% endif %}
+  <span class="page-info">Page {{ items.page }} of {{ items.pages }} ({{ items.total }} items)</span>
+  {% if items.has_next %}
+    <a href="{{ url_for('inventory.warehouse_detail', wh_id=warehouse.id, page=items.next_num, category=category, q=search) }}" class="btn btn-outline">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

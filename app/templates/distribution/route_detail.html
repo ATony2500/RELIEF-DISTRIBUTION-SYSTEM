@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Route {{ route.route_code }}{% endblock %}
+{% block page_title %}Delivery Route{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Route: {{ route.route_code }}</h2>
+  <div>
+    <span class="badge badge-{{ route.status }}">{{ route.status | title }}</span>
+    <a href="{{ url_for('distribution.batch_list') }}" class="btn btn-outline ml-2">← Batches</a>
+  </div>
+</div>
+
+<div class="card-grid mb-3">
+  <div class="card">
+    <div class="card-body">
+      <dl class="detail-list">
+        <dt>Route Code</dt><dd><code>{{ route.route_code }}</code></dd>
+        <dt>Name</dt><dd>{{ route.name }}</dd>
+        <dt>Origin Warehouse</dt><dd>{{ route.origin_warehouse.name }}</dd>
+        <dt>Total Distance</dt><dd><strong>{{ route.total_distance_km }} km</strong></dd>
+        <dt>Stops</dt><dd>{{ route.stops | length }}</dd>
+        <dt>Status</dt><dd><span class="badge badge-{{ route.status }}">{{ route.status | title }}</span></dd>
+        <dt>Created</dt><dd>{{ route.created_at.strftime('%d %b %Y %H:%M') }}</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3>Ordered Stops</h3></div>
+  <div class="card-body">
+    <div class="route-steps">
+      <!-- Origin -->
+      <div class="route-step route-origin">
+        <span class="step-num">🏭</span>
+        <div>
+          <strong>{{ route.origin_warehouse.name }}</strong>
+          <br /><small class="text-muted">Origin Warehouse</small>
+        </div>
+      </div>
+
+      {% for stop in route.stops %}
+        <div class="route-connector">↓ {{ stop.distance_from_prev_km }} km</div>
+        <div class="route-step">
+          <span class="step-num">{{ stop.stop_order }}</span>
+          <div>
+            <strong>{{ stop.distribution_point.name }}</strong>
+            <br />
+            <small class="text-muted">
+              {{ stop.distribution_point.lga.name if stop.distribution_point.lga else '' }}
+              · {{ stop.distribution_point.latitude }}, {{ stop.distribution_point.longitude }}
+            </small>
+          </div>
+        </div>
+      {% else %}
+        <p class="text-muted mt-3">No stops recorded for this route.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

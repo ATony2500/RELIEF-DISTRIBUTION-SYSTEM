@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Register Beneficiary{% endblock %}
 {% block page_title %}Register Beneficiary{% endblock %}
 
@@ -13,6 +13,7 @@
 {% endif %}
 
 <form method="POST" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <div class="card-grid">
     <!-- Identity -->
     <div class="card">
@@ -149,3 +150,4 @@ document.getElementById('verifyNinBtn').addEventListener('click', function() {
 });
 </script>
 {% endblock %}
+

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Edit Beneficiary{% endblock %}
 {% block page_title %}Edit Beneficiary{% endblock %}
 
@@ -11,6 +11,7 @@
 {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
 
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <div class="card-grid">
     <div class="card">
       <div class="card-header"><h3>Personal Details</h3></div>
@@ -96,3 +97,4 @@
   </div>
 </form>
 {% endblock %}
+

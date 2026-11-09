@@ -5,16 +5,18 @@ Only accessible to users with role='admin'.
 
 from flask import (
     Blueprint, render_template, redirect, url_for,
-    flash, request, abort,
+    flash, request,
 )
 from flask_login import login_required, current_user
 from app import db
 from app.models.user import User
 from app.models.audit import AuditLog
-from app.models.zone import State, LocalGovernmentArea, DistributionPoint
-from app.utils.audit import audit_log
+from app.models.zone import DistributionPoint
 from app.utils.decorators import admin_required
-from app.utils.helpers import paginate_query
+from app.utils.helpers import (
+    paginate_query, get_or_404, form_str,
+    get_all_states, get_all_lgas, commit_with_audit,
+)
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -38,50 +40,52 @@ def user_list():
 @login_required
 @admin_required
 def create_user():
-    states = State.query.order_by(State.name).all()
+    states = get_all_states()
     error = None
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        email = request.form.get("email", "").strip()
-        full_name = request.form.get("full_name", "").strip()
+        username = form_str("username", max_len=64)
+        email = form_str("email", max_len=120)
+        full_name = form_str("full_name", max_len=120)
         role = request.form.get("role", "field_officer")
         password = request.form.get("password", "")
         confirm = request.form.get("confirm_password", "")
-        phone = request.form.get("phone", "").strip()
-        organisation = request.form.get("organisation", "").strip()
+        phone = form_str("phone", max_len=20)
+        organisation = form_str("organisation", max_len=120)
         state_id = request.form.get("state_id") or None
 
         if User.query.filter_by(username=username).first():
             error = "Username already taken."
         elif User.query.filter_by(email=email).first():
             error = "Email already registered."
-        elif len(password) < 8:
-            error = "Password must be at least 8 characters."
-        elif password != confirm:
-            error = "Passwords do not match."
         else:
-            new_user = User(
-                username=username,
-                email=email,
-                full_name=full_name,
-                role=role,
-                phone=phone,
-                organisation=organisation,
-                state_id=int(state_id) if state_id else None,
-            )
-            new_user.set_password(password)
-            db.session.add(new_user)
-            db.session.flush()
-            audit_log(
-                action="CREATE_USER",
-                entity_type="User",
-                entity_id=new_user.id,
-                description=f"Admin '{current_user.username}' created user '{username}' with role '{role}'.",
-            )
-            db.session.commit()
-            flash(f"User '{username}' created successfully.", "success")
-            return redirect(url_for("admin.user_list"))
+            # #4: strength validation
+            strength_error = User.validate_password_strength(password)
+            if strength_error:
+                error = strength_error
+            elif password != confirm:
+                error = "Passwords do not match."
+            else:
+                new_user = User(
+                    username=username,
+                    email=email,
+                    full_name=full_name,
+                    role=role,
+                    phone=phone,
+                    organisation=organisation,
+                    state_id=int(state_id) if state_id else None,
+                )
+                new_user.set_password(password)
+                db.session.add(new_user)
+                db.session.flush()
+                commit_with_audit(
+                    action="CREATE_USER",
+                    entity_type="User",
+                    entity_id=new_user.id,
+                    description=f"Admin '{current_user.username}' created user '{username}' with role '{role}'.",
+                )
+                flash(f"User '{username}' created successfully.", "success")
+                return redirect(url_for("admin.user_list"))
 
     return render_template("admin/create_user.html", states=states, error=error)
 
@@ -90,17 +94,16 @@ def create_user():
 @login_required
 @admin_required
 def toggle_user(user_id):
-    user = db.session.get(User, user_id)
-    if not user:
-        abort(404)
+    user = get_or_404(User, user_id)
     if user.id == current_user.id:
         flash("You cannot deactivate your own account.", "warning")
         return redirect(url_for("admin.user_list"))
     user.is_active = not user.is_active
     action = "ACTIVATE_USER" if user.is_active else "DEACTIVATE_USER"
-    audit_log(action=action, entity_type="User", entity_id=user.id,
-              description=f"Admin toggled user '{user.username}' active={user.is_active}.")
-    db.session.commit()
+    commit_with_audit(
+        action=action, entity_type="User", entity_id=user.id,
+        description=f"Admin toggled user '{user.username}' active={user.is_active}.",
+    )
     flash(f"User '{user.username}' {'activated' if user.is_active else 'deactivated'}.", "success")
     return redirect(url_for("admin.user_list"))
 
@@ -141,18 +144,18 @@ def distribution_points():
 @login_required
 @admin_required
 def create_distribution_point():
-    lgas = LocalGovernmentArea.query.order_by(LocalGovernmentArea.name).all()
+    lgas = get_all_lgas()
     error = None
 
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        address = request.form.get("address", "").strip()
+        name = form_str("name")
+        address = form_str("address")
         lga_id = request.form.get("lga_id", type=int)
         latitude = request.form.get("latitude", type=float)
         longitude = request.form.get("longitude", type=float)
         capacity = request.form.get("capacity", type=int)
-        contact_person = request.form.get("contact_person", "").strip()
-        contact_phone = request.form.get("contact_phone", "").strip()
+        contact_person = form_str("contact_person")
+        contact_phone = form_str("contact_phone")
 
         if not name or not lga_id or latitude is None or longitude is None:
             error = "Name, LGA, latitude, and longitude are required."
@@ -169,13 +172,12 @@ def create_distribution_point():
             )
             db.session.add(dp)
             db.session.flush()
-            audit_log(
+            commit_with_audit(
                 action="CREATE_DISTRIBUTION_POINT",
                 entity_type="DistributionPoint",
                 entity_id=dp.id,
                 description=f"Created distribution point '{name}'.",
             )
-            db.session.commit()
             flash(f"Distribution point '{name}' created.", "success")
             return redirect(url_for("admin.distribution_points"))
 
