@@ -233,19 +233,31 @@ Tests all 25 pages by logging in as admin and checking for HTTP errors.
 
 | Role | Permissions |
 |---|---|
-| `admin` | Full system access |
+| `admin` | Full system access including application review |
 | `programme_coord` | Manage batches, view reports |
 | `warehouse` | Manage inventory |
 | `field_officer` | Register beneficiaries, record distributions |
 | `logistics` | Create routes |
 | `partner` | Read-only reports |
+| `beneficiary` | Self-register, submit relief application, view own status |
 
 ### Audit Trail
 - Every create/update/delete action is logged immutably
 - Captures user, IP address, timestamp, entity type and ID
 - Viewable in admin panel with action-based filtering
 
-### Reporting
+### Beneficiary Self-Registration & Application
+- Aspirants visit `/register` to create an account (assigned the `beneficiary` role)
+- After account creation they are taken directly to `/apply` to fill in their relief application
+- Application collects NIN (hashed), personal details, LGA, address, and vulnerability flags
+- Submitted applications have status `pending` and are visible only to admins
+- Aspirants check their status at `/portal` — shows pending, approved, or rejected
+- Admins review applications at `/admin/applications` with one-click approve/reject
+- Approving sets the beneficiary status to `active`; rejecting sets it to `rejected`
+- Both decisions can be reversed from the detail page
+- A pending applications badge appears in the admin sidebar and dashboard
+
+
 - Beneficiary summary by state, gender, and vulnerability
 - Inventory report with low-stock highlighting and category grouping
 - Distribution report with batch performance and completion rates

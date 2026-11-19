@@ -83,6 +83,15 @@
           <td class="text-muted">{{ b.registered_at.strftime('%d %b %Y') }}</td>
           <td>
             <a href="{{ url_for('beneficiary.view', beneficiary_id=b.id) }}" class="btn btn-sm btn-outline">View</a>
+            {% if current_user.is_admin and b.distribution_records.count() == 0 %}
+              <form method="POST"
+                    action="{{ url_for('beneficiary.delete_beneficiary', beneficiary_id=b.id) }}"
+                    style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="btn btn-sm btn-danger"
+                        data-confirm="Delete {{ b.full_name }}?">🗑</button>
+              </form>
+            {% endif %}
           </td>
         </tr>
         {% else %}

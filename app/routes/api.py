@@ -11,8 +11,37 @@ from app.models.inventory import Warehouse, InventoryItem
 from app.models.beneficiary import Beneficiary
 from app.models.distribution import DistributionRecord
 from app.utils.helpers import beneficiary_nin_lookup
+from app.utils.nin_verifier import validate_nin_format, verify_nin
 
 api_bp = Blueprint("api", __name__)
+
+
+@api_bp.route("/nin/verify", methods=["POST"])
+@login_required
+def nin_verify():
+    """
+    Live NIN verification via VerifyMe API.
+    Called client-side from beneficiary register and apply forms.
+
+    POST JSON: { "nin": "12345678901", "firstname": "", "lastname": "", "dob": "" }
+    Returns:   { "verified": bool, "message": str, "source": str }
+    Note:      `data` and `field_matches` are omitted to avoid leaking PII.
+    """
+    body = request.get_json(silent=True) or {}
+    nin       = str(body.get("nin",       "")).strip()
+    firstname = str(body.get("firstname", "")).strip()
+    lastname  = str(body.get("lastname",  "")).strip()
+    dob       = str(body.get("dob",       "")).strip()
+
+    if not validate_nin_format(nin):
+        return jsonify({"verified": False, "message": "NIN must be exactly 11 numeric digits.", "source": "validation"}), 400
+
+    result = verify_nin(nin, firstname=firstname, lastname=lastname, dob=dob)
+    return jsonify({
+        "verified": result["verified"],
+        "message":  result["message"],
+        "source":   result["source"],
+    })
 
 
 @api_bp.route("/states")

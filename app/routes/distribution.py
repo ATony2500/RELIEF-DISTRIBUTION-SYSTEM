@@ -99,6 +99,88 @@ def create_batch():
 
 
 # ---------------------------------------------------------------------------
+# Edit batch
+# ---------------------------------------------------------------------------
+
+@distribution_bp.route("/<int:batch_id>/edit", methods=["GET", "POST"])
+@login_required
+@roles_required("admin", "programme_coord")
+def edit_batch(batch_id):
+    batch = get_or_404(DistributionBatch, batch_id)
+
+    # Completed batches cannot be edited
+    if batch.status == "completed":
+        flash("Completed batches cannot be edited.", "warning")
+        return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
+
+    warehouses = get_active_warehouses()
+    error = None
+
+    if request.method == "POST":
+        title         = form_str("title", max_len=200)
+        disaster_type = request.form.get("disaster_type", "")
+        description   = form_str("description", max_len=1000) or None
+        warehouse_id  = request.form.get("source_warehouse_id", type=int)
+        planned_date_str = request.form.get("planned_date", "").strip()
+
+        if not title or not disaster_type or not warehouse_id or not planned_date_str:
+            error = "Title, disaster type, source warehouse, and planned date are required."
+        else:
+            planned_date = parse_date(planned_date_str)
+            if not planned_date:
+                error = "Invalid date format."
+            else:
+                batch.title               = title
+                batch.disaster_type       = disaster_type
+                batch.description         = description
+                batch.source_warehouse_id = warehouse_id
+                batch.planned_date        = planned_date
+                commit_with_audit(
+                    "UPDATE_BATCH", "DistributionBatch", batch.id,
+                    f"Updated batch '{batch.batch_code}'.",
+                )
+                flash(f"Batch '{batch.batch_code}' updated.", "success")
+                return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
+
+    return render_template(
+        "distribution/edit_batch.html",
+        batch=batch,
+        warehouses=warehouses,
+        error=error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Delete batch
+# ---------------------------------------------------------------------------
+
+@distribution_bp.route("/<int:batch_id>/delete", methods=["POST"])
+@login_required
+@roles_required("admin")
+def delete_batch(batch_id):
+    batch = get_or_404(DistributionBatch, batch_id)
+
+    if batch.total_beneficiaries > 0:
+        flash(
+            f"Cannot delete '{batch.batch_code}' — it has "
+            f"{batch.total_beneficiaries} distribution record(s). "
+            "Cancel it instead, or delete all records first.",
+            "danger",
+        )
+        return redirect(url_for("distribution.batch_detail", batch_id=batch.id))
+
+    code = batch.batch_code
+    commit_with_audit(
+        "DELETE_BATCH", "DistributionBatch", batch.id,
+        f"Deleted batch '{code}'.",
+    )
+    db.session.delete(batch)
+    db.session.commit()
+    flash(f"Batch '{code}' deleted.", "success")
+    return redirect(url_for("distribution.batch_list"))
+
+
+# ---------------------------------------------------------------------------
 # Batch detail
 # ---------------------------------------------------------------------------
 

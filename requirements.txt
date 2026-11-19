@@ -18,3 +18,4 @@ itsdangerous==2.2.0
 click>=8.1.7
 alembic==1.13.1
 gunicorn==22.0.0
+requests>=2.31.0

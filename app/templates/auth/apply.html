@@ -1,0 +1,157 @@
+{% extends "auth_base.html" %}
+{% block title %}Apply for Relief{% endblock %}
+
+{% block content %}
+<div class="login-card" style="max-width:640px;">
+  <div class="login-logo">
+    <span style="font-size:3rem;">🛡️</span>
+    <h1>NRDS</h1>
+    <p>Relief Application Form</p>
+  </div>
+
+  {% if existing %}
+    <div class="alert alert-info">
+      You have already submitted an application.
+      <a href="{{ url_for('auth.portal') }}">View status →</a>
+    </div>
+  {% else %}
+
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <p class="text-muted mb-4" style="font-size:.875rem;">
+    Fill in your details accurately. Your National Identification Number (NIN) is required
+    for verification. All information is treated as confidential.
+  </p>
+
+  <form method="POST" action="{{ url_for('auth.apply') }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+    <!-- Identity -->
+    <div class="form-group">
+      <label for="nin">National Identification Number (NIN) <span class="required">*</span></label>
+      <div class="input-group">
+        <input type="text" id="nin" name="nin" class="form-control"
+               placeholder="11-digit NIN" maxlength="11" pattern="\d{11}"
+               required inputmode="numeric" value="{{ request.form.get('nin','') }}" />
+        <button type="button" class="btn-icon" id="verifyNinBtn" title="Check NIN">🔍</button>
+      </div>
+      <div id="ninResult" class="form-hint"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>First Name <span class="required">*</span></label>
+        <input type="text" name="first_name" class="form-control" required
+               value="{{ request.form.get('first_name','') }}" />
+      </div>
+      <div class="form-group">
+        <label>Last Name <span class="required">*</span></label>
+        <input type="text" name="last_name" class="form-control" required
+               value="{{ request.form.get('last_name','') }}" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Middle Name</label>
+        <input type="text" name="middle_name" class="form-control"
+               value="{{ request.form.get('middle_name','') }}" />
+      </div>
+      <div class="form-group">
+        <label>Date of Birth</label>
+        <input type="date" name="date_of_birth" class="form-control"
+               value="{{ request.form.get('date_of_birth','') }}" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Gender <span class="required">*</span></label>
+        <select name="gender" class="form-control" required>
+          <option value="">Select…</option>
+          {% for g in ['Male','Female','Other'] %}
+            <option value="{{ g }}" {% if request.form.get('gender') == g %}selected{% endif %}>{{ g }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" name="phone" class="form-control"
+               placeholder="e.g. 08012345678"
+               value="{{ request.form.get('phone','') }}" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" name="email" class="form-control"
+             value="{{ request.form.get('email','') }}" />
+    </div>
+
+    <div class="form-group">
+      <label>LGA (Local Government Area) <span class="required">*</span></label>
+      <select name="lga_id" class="form-control" required>
+        <option value="">Select LGA…</option>
+        {% for lga in lgas %}
+          <option value="{{ lga.id }}"
+            {% if request.form.get('lga_id')|string == lga.id|string %}selected{% endif %}>
+            {{ lga.name }} ({{ lga.state.name }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Home Address</label>
+      <textarea name="address" class="form-control" rows="2">{{ request.form.get('address','') }}</textarea>
+    </div>
+
+    <!-- Vulnerability flags -->
+    <div class="form-group">
+      <label>Vulnerability / Priority Flags</label>
+      <p class="form-hint text-muted mb-2">Select all that apply to you.</p>
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_disabled"
+            {% if request.form.get('is_disabled') %}checked{% endif %} />
+          Person with disability
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_pregnant"
+            {% if request.form.get('is_pregnant') %}checked{% endif %} />
+          Pregnant or nursing mother
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_elderly"
+            {% if request.form.get('is_elderly') %}checked{% endif %} />
+          Elderly (65+)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_unaccompanied_minor"
+            {% if request.form.get('is_unaccompanied_minor') %}checked{% endif %} />
+          Unaccompanied minor
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_head_of_household"
+            {% if request.form.get('is_head_of_household') %}checked{% endif %} />
+          Head of household
+        </label>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block btn-lg mt-2">
+      📤 Submit Application
+    </button>
+  </form>
+
+  {% endif %}
+
+  <p class="login-footer mt-4">
+    <a href="{{ url_for('auth.portal') }}">← Back to portal</a>
+    &nbsp;·&nbsp;
+    <a href="{{ url_for('auth.logout') }}">Sign out</a>
+  </p>
+</div>
+{% endblock %}

@@ -28,7 +28,14 @@
     <div class="stat-label">Active Batches</div>
     <a href="{{ url_for('distribution.batch_list') }}?status=in_progress" class="stat-link">View active →</a>
   </div>
-  <div class="stat-card {% if stats.low_stock_count > 0 %}stat-red{% else %}stat-teal{% endif %}">
+  {% if current_user.is_admin and pending_applications > 0 %}
+  <div class="stat-card stat-orange">
+    <div class="stat-icon">📝</div>
+    <div class="stat-value">{{ pending_applications }}</div>
+    <div class="stat-label">Pending Applications</div>
+    <a href="{{ url_for('admin.applications', status='pending') }}" class="stat-link">Review now →</a>
+  </div>
+  {% endif %}
     <div class="stat-icon">🏭</div>
     <div class="stat-value">{{ stats.total_warehouses }}</div>
     <div class="stat-label">Active Warehouses

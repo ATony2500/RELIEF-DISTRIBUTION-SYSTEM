@@ -7,6 +7,24 @@
   <h2>{{ beneficiary.full_name }}</h2>
   <div>
     <a href="{{ url_for('beneficiary.edit', beneficiary_id=beneficiary.id) }}" class="btn btn-outline">✏️ Edit</a>
+    {% if current_user.is_admin %}
+      {% if dist_records | length == 0 %}
+        <form method="POST"
+              action="{{ url_for('beneficiary.delete_beneficiary', beneficiary_id=beneficiary.id) }}"
+              style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn btn-danger btn-sm"
+                  data-confirm="Permanently delete {{ beneficiary.full_name }}? This cannot be undone.">
+            🗑 Delete
+          </button>
+        </form>
+      {% else %}
+        <button class="btn btn-danger btn-sm" disabled
+                title="Cannot delete — beneficiary has distribution records">
+          🗑 Delete
+        </button>
+      {% endif %}
+    {% endif %}
     <a href="{{ url_for('beneficiary.list_beneficiaries') }}" class="btn btn-outline">← Back</a>
   </div>
 </div>
@@ -110,26 +128,4 @@
     · NIN verified {{ beneficiary.verification_date.strftime('%d %b %Y') }}: {{ beneficiary.verification_notes }}
   {% endif %}
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-const reverifyBtn = document.getElementById('reverifyBtn');
-if (reverifyBtn) {
-  reverifyBtn.addEventListener('click', function() {
-    const id = this.dataset.id;
-    const result = document.getElementById('reverifyResult');
-    result.className = 'form-hint text-muted';
-    result.textContent = 'Verifying…';
-    fetch(`/beneficiaries/${id}/verify-nin`, { method: 'POST',
-      headers: { 'X-CSRFToken': '' } })
-      .then(r => r.json())
-      .then(data => {
-        result.className = data.verified ? 'form-hint text-success' : 'form-hint text-danger';
-        result.textContent = data.message;
-        if (data.verified) location.reload();
-      });
-  });
-}
-</script>
 {% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}NIN Registry{% endblock %}
+{% block page_title %}NIN Registry{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Local NIN Registry</h2>
+  <div>
+    <a href="{{ url_for('admin.nin_registry_import') }}" class="btn btn-outline">📥 Import CSV</a>
+    <a href="{{ url_for('admin.nin_registry_add') }}" class="btn btn-primary">➕ Add Record</a>
+  </div>
+</div>
+
+<div class="alert alert-info mb-4" style="font-size:.85rem;">
+  ℹ This registry acts as a local NIMC database. NINs are looked up here first before
+  falling through to VerifyMe or simulation. Raw NINs are never stored — only their
+  SHA-256 hash and a masked display value.
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" class="inline-form">
+      <input type="text" name="q" class="form-control" style="max-width:320px;"
+             placeholder="Search name or masked NIN…" value="{{ search }}" />
+      <button type="submit" class="btn btn-outline">🔍 Search</button>
+      {% if search %}
+        <a href="{{ url_for('admin.nin_registry') }}" class="btn btn-outline">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Masked NIN</th><th>Full Name</th><th>Gender</th>
+          <th>DOB</th><th>Phone</th><th>State</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records.items %}
+        <tr>
+          <td><code>{{ rec.nin_masked }}</code></td>
+          <td><strong>{{ rec.full_name }}</strong></td>
+          <td>{{ rec.gender }}</td>
+          <td class="text-muted">{{ rec.birthdate or '—' }}</td>
+          <td class="text-muted">{{ rec.phone or '—' }}</td>
+          <td class="text-muted">{{ rec.state_of_origin or '—' }}</td>
+          <td>
+            {% if rec.is_active %}
+              <span class="badge badge-active">Active</span>
+            {% else %}
+              <span class="badge badge-inactive">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('admin.nin_registry_edit', rec_id=rec.id) }}"
+               class="btn btn-sm btn-outline">✏️</a>
+            <form method="POST" action="{{ url_for('admin.nin_registry_delete', rec_id=rec.id) }}"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button type="submit" class="btn btn-sm btn-danger"
+                      data-confirm="Delete this NIN record?">🗑</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">
+            No records found.
+            <a href="{{ url_for('admin.nin_registry_add') }}">Add one</a> or
+            <a href="{{ url_for('admin.nin_registry_import') }}">import a CSV</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if records.pages > 1 %}
+<div class="pagination mt-3">
+  {% if records.has_prev %}
+    <a href="{{ url_for('admin.nin_registry', page=records.prev_num, q=search) }}"
+       class="btn btn-outline">← Prev</a>
+  {% endif %}
+  <span class="page-info">Page {{ records.page }} of {{ records.pages }} ({{ records.total }} records)</span>
+  {% if records.has_next %}
+    <a href="{{ url_for('admin.nin_registry', page=records.next_num, q=search) }}"
+       class="btn btn-outline">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

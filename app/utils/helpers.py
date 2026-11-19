@@ -160,3 +160,62 @@ def beneficiary_nin_lookup(nin):
         "masked_nin": b.masked_nin,
         "lga": b.lga.name if b.lga else "",
     }
+
+
+# ---------------------------------------------------------------------------
+# Vulnerability flags helper  (#3)
+# ---------------------------------------------------------------------------
+
+def form_vulnerability_flags() -> dict:
+    """
+    Extract all five vulnerability checkbox values from the current request form.
+    Returns a dict with boolean values, ready to be unpacked onto a Beneficiary.
+    """
+    return {
+        "is_disabled":            request.form.get("is_disabled")            == "on",
+        "is_pregnant":            request.form.get("is_pregnant")            == "on",
+        "is_elderly":             request.form.get("is_elderly")             == "on",
+        "is_unaccompanied_minor": request.form.get("is_unaccompanied_minor") == "on",
+        "is_head_of_household":   request.form.get("is_head_of_household")   == "on",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Beneficiary-role guard decorator  (#9)
+# ---------------------------------------------------------------------------
+
+def beneficiary_role_required(f):
+    """
+    Redirect any non-beneficiary user to the main dashboard.
+    Apply after @login_required.
+    """
+    from functools import wraps
+    from flask import redirect, url_for
+    from flask_login import current_user
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != "beneficiary":
+            return redirect(url_for("main.dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ---------------------------------------------------------------------------
+# Shared CSV response helper  (#11)
+# ---------------------------------------------------------------------------
+
+def csv_response(buf, filename_stem: str):
+    """
+    Return a CSV download Response from an io.StringIO buffer.
+    Shared by reports.py and admin.py to avoid duplication.
+    """
+    import io
+    from flask import Response
+    stamp = utc_now().strftime("%Y%m%d_%H%M")
+    filename = f"nrds_{filename_stem}_{stamp}.csv"
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -101,11 +101,28 @@ class Beneficiary(db.Model):
 
     # Status — #22: indexed for fast filter queries
     status = db.Column(
-        db.Enum("active", "inactive", "duplicate", "flagged", name="beneficiary_status_enum"),
-        default="active",
+        db.Enum(
+            "pending", "active", "inactive", "duplicate", "flagged", "rejected",
+            name="beneficiary_status_enum",
+        ),
+        default="pending",
         nullable=False,
         index=True,
     )
+
+    # Optional link back to the User who submitted this application
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True, unique=True, index=True
+    )
+
+    # Review fields
+    rejection_reason = db.Column(db.Text, nullable=True)
+    review_notes     = db.Column(db.Text, nullable=True)   # internal, not shown to applicant
+    reviewed_by      = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at      = db.Column(db.DateTime, nullable=True)
+
+    # Vulnerability priority score (computed on save, used for sorting)
+    priority_score = db.Column(db.Integer, default=0, nullable=False)
 
     # Audit
     registered_at = db.Column(db.DateTime, default=utc_now, nullable=False, index=True)
@@ -118,6 +135,8 @@ class Beneficiary(db.Model):
     distribution_records = db.relationship(
         "DistributionRecord", back_populates="beneficiary", lazy="dynamic"
     )
+    applicant = db.relationship("User", foreign_keys=[user_id], backref="beneficiary_application")
+    reviewer  = db.relationship("User", foreign_keys=[reviewed_by])
 
     # ------------------------------------------------------------------
     # NIN helpers (#5)
@@ -144,6 +163,23 @@ class Beneficiary(db.Model):
     @property
     def masked_nin(self) -> str:
         return self.nin_masked
+
+    # ------------------------------------------------------------------
+    # Priority score helper
+    # ------------------------------------------------------------------
+
+    def compute_priority_score(self) -> int:
+        """
+        Compute vulnerability priority score (0-9).
+        Higher = more urgent. Used to sort pending applications.
+        """
+        score = 0
+        if self.is_unaccompanied_minor: score += 3
+        if self.is_disabled:            score += 2
+        if self.is_pregnant:            score += 2
+        if self.is_elderly:             score += 1
+        if self.is_head_of_household:   score += 1
+        return score
 
     # ------------------------------------------------------------------
     # Name helper

@@ -45,6 +45,9 @@ pages = [
     "/admin/audit-log",
     "/admin/distribution-points",
     "/admin/distribution-points/create",
+    "/admin/nin-registry",
+    "/admin/nin-registry/add",
+    "/admin/nin-registry/import",
 ]
 
 err_kw = [b"jinja2.", b"TemplateAssert", b"CompileError", b"OperationalError",

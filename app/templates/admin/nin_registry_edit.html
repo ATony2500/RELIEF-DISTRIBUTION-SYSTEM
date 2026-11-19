@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Edit NIN Record{% endblock %}
+{% block page_title %}Edit NIN Record{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Edit — {{ rec.full_name }}</h2>
+  <a href="{{ url_for('admin.nin_registry') }}" class="btn btn-outline">← Registry</a>
+</div>
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<div class="card" style="max-width:680px;">
+  <div class="card-body">
+
+    <div class="stat-highlight mb-4">
+      NIN: <code>{{ rec.nin_masked }}</code>
+      <small class="text-muted ml-2">(the NIN itself cannot be changed — delete and re-add if needed)</small>
+    </div>
+
+    <form method="POST" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Name <span class="required">*</span></label>
+          <input type="text" name="firstname" class="form-control" required
+                 value="{{ request.form.get('firstname', rec.firstname) }}" />
+        </div>
+        <div class="form-group">
+          <label>Last Name <span class="required">*</span></label>
+          <input type="text" name="lastname" class="form-control" required
+                 value="{{ request.form.get('lastname', rec.lastname) }}" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Middle Name</label>
+          <input type="text" name="middlename" class="form-control"
+                 value="{{ request.form.get('middlename', rec.middlename or '') }}" />
+        </div>
+        <div class="form-group">
+          <label>Gender <span class="required">*</span></label>
+          <select name="gender" class="form-control" required>
+            {% for g in ['Male','Female','Other'] %}
+              <option value="{{ g }}"
+                {% if request.form.get('gender', rec.gender) == g %}selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date of Birth <small class="text-muted">(DD-MM-YYYY)</small></label>
+          <input type="text" name="birthdate" class="form-control"
+                 value="{{ request.form.get('birthdate', rec.birthdate or '') }}" />
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" name="phone" class="form-control"
+                 value="{{ request.form.get('phone', rec.phone or '') }}" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>State of Origin</label>
+          <input type="text" name="state_of_origin" class="form-control"
+                 value="{{ request.form.get('state_of_origin', rec.state_of_origin or '') }}" />
+        </div>
+        <div class="form-group">
+          <label>LGA of Origin</label>
+          <input type="text" name="lga_of_origin" class="form-control"
+                 value="{{ request.form.get('lga_of_origin', rec.lga_of_origin or '') }}" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_active"
+            {% if request.form.get('is_active') or (not request.form and rec.is_active) %}checked{% endif %} />
+          Active (NIN can be used for verification)
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+        <a href="{{ url_for('admin.nin_registry') }}" class="btn btn-outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

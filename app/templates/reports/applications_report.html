@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Applications Report{% endblock %}
+{% block page_title %}Applications Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Applications Report</h2>
+  <div>
+    <a href="{{ url_for('reports.export_applications_report') }}" class="btn btn-outline">⬇ Export CSV</a>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-outline">← Reports</a>
+  </div>
+</div>
+
+<!-- Summary stats -->
+<div class="stats-grid mb-3">
+  <div class="stat-card stat-blue">
+    <div class="stat-icon">📋</div>
+    <div class="stat-value">{{ total }}</div>
+    <div class="stat-label">Total Applications</div>
+  </div>
+  <div class="stat-card stat-orange">
+    <div class="stat-icon">⏳</div>
+    <div class="stat-value">{{ pending }}</div>
+    <div class="stat-label">Pending Review</div>
+    <a href="{{ url_for('admin.applications', status='pending') }}" class="stat-link">Review now →</a>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-icon">✅</div>
+    <div class="stat-value">{{ approved }}</div>
+    <div class="stat-label">Approved</div>
+  </div>
+  <div class="stat-card stat-red">
+    <div class="stat-icon">❌</div>
+    <div class="stat-value">{{ rejected }}</div>
+    <div class="stat-label">Rejected</div>
+  </div>
+  <div class="stat-card stat-teal">
+    <div class="stat-icon">📊</div>
+    <div class="stat-value">{{ "%.0f" | format(approved / total * 100 if total else 0) }}%</div>
+    <div class="stat-label">Approval Rate</div>
+  </div>
+</div>
+
+<div class="card-grid">
+
+  <!-- By state -->
+  <div class="card">
+    <div class="card-header"><h3>Applications by State</h3></div>
+    <div class="card-body">
+      {% if by_state %}
+        {% set max_count = by_state[0][1] %}
+        {% for state_name, count in by_state %}
+          <div class="bar-item">
+            <div class="bar-label">
+              <span>{{ state_name }}</span>
+              <span class="text-muted" style="float:right;">{{ count }}</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill bar-fill-blue"
+                   style="width:{{ (count / max_count * 100) | int }}%"></div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted text-center py-3">No data yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Vulnerability breakdown -->
+  <div class="card">
+    <div class="card-header"><h3>Vulnerability Breakdown</h3></div>
+    <div class="card-body">
+      {% set vuln_items = [
+        ('Persons with Disability', vuln.disabled),
+        ('Pregnant / Nursing',      vuln.pregnant),
+        ('Elderly (65+)',           vuln.elderly),
+        ('Unaccompanied Minors',    vuln.minor),
+      ] %}
+      {% set max_v = [vuln.disabled, vuln.pregnant, vuln.elderly, vuln.minor] | max or 1 %}
+      {% for label, count in vuln_items %}
+        <div class="bar-item">
+          <div class="bar-label">
+            <span>{{ label }}</span>
+            <span class="text-muted" style="float:right;">{{ count }}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-fill-orange"
+                 style="width:{{ (count / max_v * 100) | int }}%"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

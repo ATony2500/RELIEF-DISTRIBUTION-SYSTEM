@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Application — {{ b.full_name }}{% endblock %}
+{% block page_title %}Application Review{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>{{ b.full_name }}</h2>
+  <a href="{{ url_for('admin.applications') }}" class="btn btn-outline">← Applications</a>
+</div>
+
+<div class="card-grid">
+
+  <!-- Personal details -->
+  <div class="card">
+    <div class="card-header"><h3>Personal Information</h3></div>
+    <div class="card-body">
+      <dl class="detail-list">
+        <dt>Full Name</dt><dd>{{ b.full_name }}</dd>
+        <dt>NIN</dt><dd><code>{{ b.masked_nin }}</code></dd>
+        <dt>NIN Verified</dt>
+        <dd>
+          {% if b.nin_verified %}
+            <span class="badge badge-success">✓ Verified</span>
+            {% if b.verification_date %}
+              <small class="text-muted ml-2">{{ b.verification_date.strftime('%d %b %Y') }}</small>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-warning">Not Verified</span>
+          {% endif %}
+        </dd>
+        <dt>Date of Birth</dt><dd>{{ b.date_of_birth.strftime('%d %b %Y') if b.date_of_birth else '—' }}</dd>
+        <dt>Gender</dt><dd>{{ b.gender }}</dd>
+        <dt>Phone</dt><dd>{{ b.phone or '—' }}</dd>
+        <dt>Email</dt><dd>{{ b.email or '—' }}</dd>
+        <dt>LGA</dt><dd>{{ b.lga.name if b.lga else '—' }}</dd>
+        <dt>State</dt><dd>{{ b.lga.state.name if b.lga else '—' }}</dd>
+        <dt>Address</dt><dd>{{ b.address or '—' }}</dd>
+        <dt>Submitted</dt><dd>{{ b.registered_at.strftime('%d %b %Y %H:%M') }}</dd>
+        {% if b.reviewed_at %}
+          <dt>Reviewed</dt><dd>{{ b.reviewed_at.strftime('%d %b %Y %H:%M') }}
+            {% if b.reviewer %}<small class="text-muted">by {{ b.reviewer.full_name }}</small>{% endif %}
+          </dd>
+        {% endif %}
+      </dl>
+
+      {% if b.applicant %}
+        <div class="form-hint text-muted mt-3">
+          Account: <strong>@{{ b.applicant.username }}</strong> · {{ b.applicant.email }}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Vulnerability + Decision -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Vulnerability &amp; Decision</h3>
+      {% if b.priority_score > 0 %}
+        <span class="badge {% if b.priority_score >= 4 %}badge-danger{% elif b.priority_score >= 2 %}badge-warning{% else %}badge-info{% endif %}">
+          Priority {{ b.priority_score }}
+        </span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <div class="vulnerability-tags mb-4">
+        <span class="vuln-tag {% if b.is_elderly %}active{% endif %}">Elderly (65+)</span>
+        <span class="vuln-tag {% if b.is_disabled %}active{% endif %}">Person with Disability</span>
+        <span class="vuln-tag {% if b.is_pregnant %}active{% endif %}">Pregnant / Nursing</span>
+        <span class="vuln-tag {% if b.is_unaccompanied_minor %}active{% endif %}">Unaccompanied Minor</span>
+        <span class="vuln-tag {% if b.is_head_of_household %}active{% endif %}">Head of Household</span>
+      </div>
+
+      <div class="stat-highlight mb-4">
+        Status: <span class="badge badge-{{ b.status }} ml-2">{{ b.status | title }}</span>
+      </div>
+
+      {% if b.rejection_reason %}
+        <div class="alert alert-danger mb-4">
+          <strong>Rejection Reason:</strong> {{ b.rejection_reason }}
+        </div>
+      {% endif %}
+
+      {% if b.review_notes %}
+        <div class="alert alert-info mb-4">
+          <strong>Internal Notes:</strong> {{ b.review_notes }}
+        </div>
+      {% endif %}
+
+      <!-- Approve form -->
+      {% if b.status != 'active' %}
+        <form method="POST" action="{{ url_for('admin.review_application', b_id=b.id) }}" class="mb-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="action" value="approve" />
+          <div class="form-group">
+            <label>Internal Notes (optional)</label>
+            <textarea name="review_notes" class="form-control" rows="2"
+                      placeholder="e.g. Verified household visit on 12 Nov 2026">{{ b.review_notes or '' }}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">✅ Approve</button>
+        </form>
+      {% endif %}
+
+      <!-- Reject form -->
+      {% if b.status != 'rejected' %}
+        <form method="POST" action="{{ url_for('admin.review_application', b_id=b.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="action" value="reject" />
+          <div class="form-group">
+            <label>Rejection Reason <span class="required">*</span></label>
+            <textarea name="rejection_reason" class="form-control" rows="2" required
+                      placeholder="e.g. NIN could not be verified — please visit your LGA office.">{{ b.rejection_reason or '' }}</textarea>
+          </div>
+          <div class="form-group">
+            <label>Internal Notes (optional)</label>
+            <textarea name="review_notes" class="form-control" rows="2"
+                      placeholder="Internal notes — not shown to the applicant">{{ b.review_notes or '' }}</textarea>
+          </div>
+          <button type="submit" class="btn btn-danger"
+                  data-confirm="Reject this application?">❌ Reject</button>
+        </form>
+      {% elif b.status == 'rejected' %}
+        <form method="POST" action="{{ url_for('admin.review_application', b_id=b.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="action" value="approve" />
+          <button type="submit" class="btn btn-sm btn-primary">↩ Re-approve</button>
+        </form>
+      {% endif %}
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

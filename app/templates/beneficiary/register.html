@@ -120,34 +120,3 @@
 </form>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-document.getElementById('verifyNinBtn').addEventListener('click', function() {
-  const nin = document.getElementById('nin').value.trim();
-  const result = document.getElementById('ninResult');
-  if (!/^\d{11}$/.test(nin)) {
-    result.className = 'form-hint text-danger';
-    result.textContent = 'Please enter a valid 11-digit NIN first.';
-    return;
-  }
-  result.className = 'form-hint text-muted';
-  result.textContent = 'Verifying…';
-  fetch(`/api/beneficiary/lookup?nin=${nin}`)
-    .then(r => r.json())
-    .then(data => {
-      if (data.found) {
-        result.className = 'form-hint text-danger';
-        result.textContent = `⚠ A beneficiary with this NIN is already registered: ${data.full_name}`;
-      } else {
-        result.className = 'form-hint text-success';
-        result.textContent = '✓ NIN is available and will be verified on submission.';
-      }
-    })
-    .catch(() => {
-      result.className = 'form-hint text-muted';
-      result.textContent = 'Could not verify at this time.';
-    });
-});
-</script>
-{% endblock %}
-

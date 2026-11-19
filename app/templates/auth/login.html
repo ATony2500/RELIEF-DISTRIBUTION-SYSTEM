@@ -43,6 +43,9 @@
   <p class="login-footer">
     National Emergency Management Agency (NEMA) &copy; {{ now.year if now else 2026 }}
   </p>
+  <p class="login-footer mt-2">
+    New user? <a href="{{ url_for('auth.register') }}">Create an account →</a>
+  </p>
 </div>
 {% endblock %}
 

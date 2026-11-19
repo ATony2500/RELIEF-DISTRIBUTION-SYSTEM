@@ -21,7 +21,7 @@ class User(UserMixin, db.Model):
     role = db.Column(
         db.Enum(
             "admin", "programme_coord", "warehouse",
-            "field_officer", "logistics", "partner",
+            "field_officer", "logistics", "partner", "beneficiary",
             name="user_role_enum",
         ),
         nullable=False,

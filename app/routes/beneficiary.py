@@ -16,8 +16,8 @@ from app.models.zone import LocalGovernmentArea
 from app.utils.nin_verifier import verify_nin, validate_nin_format
 from app.utils.helpers import (
     paginate_query, generate_household_code,
-    get_or_404, parse_date, form_str,
-    get_all_states, get_all_lgas, commit_with_audit,
+    get_or_404, parse_date, form_str, form_vulnerability_flags,
+    get_all_states, get_all_lgas, commit_with_audit, utc_now,
 )
 from app.utils.decorators import roles_required
 
@@ -93,11 +93,8 @@ def register():
         email = form_str("email", max_len=120) or None
         lga_id = request.form.get("lga_id", type=int)
         address = form_str("address", max_len=255)
-        is_disabled = request.form.get("is_disabled") == "on"
-        is_pregnant = request.form.get("is_pregnant") == "on"
-        is_elderly = request.form.get("is_elderly") == "on"
-        is_unaccompanied_minor = request.form.get("is_unaccompanied_minor") == "on"
-        is_head = request.form.get("is_head_of_household") == "on"
+        vuln = form_vulnerability_flags()
+        is_head = vuln.pop("is_head_of_household")
 
         if not validate_nin_format(nin):
             error = "NIN must be exactly 11 numeric digits."
@@ -108,7 +105,12 @@ def register():
         elif not lga_id:
             error = "Please select an LGA."
         else:
-            verify_result = verify_nin(nin)
+            verify_result = verify_nin(
+                nin,
+                firstname=first_name,
+                lastname=last_name,
+                dob=dob_str,
+            )
             dob = parse_date(dob_str)
 
             household = None
@@ -135,12 +137,9 @@ def register():
                 address=address,
                 household=household,
                 is_head_of_household=is_head,
-                is_disabled=is_disabled,
-                is_pregnant=is_pregnant,
-                is_elderly=is_elderly,
-                is_unaccompanied_minor=is_unaccompanied_minor,
+                **vuln,
                 nin_verified=verify_result["verified"],
-                verification_date=datetime.now(timezone.utc) if verify_result["verified"] else None,
+                verification_date=utc_now() if verify_result["verified"] else None,
                 verification_notes=verify_result["message"],
                 registered_by=current_user.id,
             )
@@ -227,10 +226,8 @@ def edit(beneficiary_id):
         b.email = form_str("email", default=b.email or "", max_len=120) or None
         b.address = form_str("address", default=b.address or "", max_len=255)
         b.lga_id = request.form.get("lga_id", b.lga_id, type=int)
-        b.is_disabled = request.form.get("is_disabled") == "on"
-        b.is_pregnant = request.form.get("is_pregnant") == "on"
-        b.is_elderly = request.form.get("is_elderly") == "on"
-        b.is_unaccompanied_minor = request.form.get("is_unaccompanied_minor") == "on"
+        for k, v in form_vulnerability_flags().items():
+            setattr(b, k, v)
         new_status = request.form.get("status", b.status)
         if new_status in ("active", "inactive", "duplicate", "flagged"):
             b.status = new_status
@@ -248,8 +245,47 @@ def edit(beneficiary_id):
 
 
 # ---------------------------------------------------------------------------
-# NIN Re-verification (AJAX)
+# Delete (admin only)
 # ---------------------------------------------------------------------------
+
+@beneficiary_bp.route("/<int:beneficiary_id>/delete", methods=["POST"])
+@login_required
+@roles_required("admin")
+def delete_beneficiary(beneficiary_id):
+    b = get_or_404(Beneficiary, beneficiary_id)
+
+    # Block deletion if the beneficiary has distribution records
+    if b.distribution_records.count() > 0:
+        flash(
+            f"Cannot delete '{b.full_name}' — they have "
+            f"{b.distribution_records.count()} distribution record(s). "
+            "Set their status to 'Inactive' instead.",
+            "danger",
+        )
+        return redirect(url_for("beneficiary.view", beneficiary_id=b.id))
+
+    name = b.full_name
+    # Detach from household if head
+    if b.is_head_of_household and b.household:
+        b.household.head_of_household_nin = None
+
+    # Unlink the linked beneficiary user account (if any)
+    if b.user_id:
+        from app.models.user import User
+        linked_user = db.session.get(User, b.user_id)
+        if linked_user:
+            linked_user.is_active = False   # deactivate rather than delete
+
+    commit_with_audit(
+        action="DELETE_BENEFICIARY",
+        entity_type="Beneficiary",
+        entity_id=b.id,
+        description=f"Admin deleted beneficiary '{name}' (NIN: {b.masked_nin}).",
+    )
+    db.session.delete(b)
+    db.session.commit()
+    flash(f"Beneficiary '{name}' deleted.", "success")
+    return redirect(url_for("beneficiary.list_beneficiaries"))
 
 @beneficiary_bp.route("/<int:beneficiary_id>/verify-nin", methods=["POST"])
 @login_required

@@ -72,6 +72,25 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
+  // ── Client-side NIN plausibility check ──────────────────────────────
+  // Mirrors validate_nin_format() in nin_verifier.py.
+  function isPlausibleNin(nin) {
+    if (!/^\d{11}$/.test(nin)) return false;
+    // All identical digits
+    if (new Set(nin).size === 1) return false;
+    // Ascending or descending run of 8+ consecutive digits
+    for (let i = 0; i <= nin.length - 8; i++) {
+      const w = nin.slice(i, i + 8);
+      let asc = true, desc = true;
+      for (let j = 0; j < 7; j++) {
+        if (w.charCodeAt(j + 1) - w.charCodeAt(j) !== 1)  asc  = false;
+        if (w.charCodeAt(j + 1) - w.charCodeAt(j) !== -1) desc = false;
+      }
+      if (asc || desc) return false;
+    }
+    return true;
+  }
+
   // ── Confirm dialogs for destructive actions ───────────────────────
   document.querySelectorAll("[data-confirm]").forEach(function (el) {
     el.addEventListener("click", function (e) {
@@ -117,7 +136,7 @@ document.addEventListener("DOMContentLoaded", function () {
     lookupBtn.addEventListener("click", function () {
       const nin = document.getElementById("ninSearch").value.trim();
       const result = document.getElementById("lookupResult");
-      if (!/^\d{11}$/.test(nin)) {
+      if (!isPlausibleNin(nin)) {
         result.innerHTML = '<span class="text-danger">Enter a valid 11-digit NIN.</span>';
         return;
       }
@@ -141,33 +160,60 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // ── NIN pre-check on register form ───────────────────────────────
+  // ── NIN verification via VerifyMe API ────────────────────────────
+  // Used on: beneficiary/register.html and auth/apply.html
+  // The button collects NIN + optional name/DOB fields and calls
+  // /api/nin/verify — which calls VerifyMe (or simulation if no key).
   const verifyNinBtn = document.getElementById("verifyNinBtn");
   if (verifyNinBtn) {
     verifyNinBtn.addEventListener("click", function () {
       const nin = document.getElementById("nin").value.trim();
       const result = document.getElementById("ninResult");
-      if (!/^\d{11}$/.test(nin)) {
+
+      if (!isPlausibleNin(nin)) {
         result.className = "form-hint text-danger";
         result.textContent = "Please enter a valid 11-digit NIN first.";
         return;
       }
+
+      // Collect optional matching fields if present on the form
+      const firstNameEl = document.querySelector('input[name="first_name"]');
+      const lastNameEl  = document.querySelector('input[name="last_name"]');
+      const dobEl       = document.querySelector('input[name="date_of_birth"]');
+
+      const payload = {
+        nin:       nin,
+        firstname: firstNameEl ? firstNameEl.value.trim() : "",
+        lastname:  lastNameEl  ? lastNameEl.value.trim()  : "",
+        dob:       dobEl       ? dobEl.value.trim()       : "",
+      };
+
       result.className = "form-hint text-muted";
-      result.textContent = "Checking…";
-      apiFetch(`/api/beneficiary/lookup?nin=${nin}`)
+      result.textContent = "Verifying with NIMC…";
+
+      // Disable button while request is in flight
+      verifyNinBtn.disabled = true;
+
+      apiFetch("/api/nin/verify", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
         .then(r => r.json())
         .then(data => {
-          if (data.found) {
-            result.className = "form-hint text-danger";
-            result.textContent = `⚠ A beneficiary with this NIN is already registered: ${data.full_name}`;
-          } else {
+          if (data.verified) {
             result.className = "form-hint text-success";
-            result.textContent = "✓ NIN is available and will be verified on submission.";
+            result.textContent = "✓ " + (data.message || "NIN verified successfully.");
+          } else {
+            result.className = "form-hint text-danger";
+            result.textContent = "✗ " + (data.message || "NIN could not be verified.");
           }
         })
         .catch(() => {
           result.className = "form-hint text-muted";
-          result.textContent = "Could not verify at this time.";
+          result.textContent = "Verification service unavailable. It will be re-checked on submission.";
+        })
+        .finally(() => {
+          verifyNinBtn.disabled = false;
         });
     });
   }

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Applications{% endblock %}
+{% block page_title %}Applications{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Relief Applications</h2>
+  <a href="{{ url_for('reports.applications_report') }}" class="btn btn-outline">📊 Report</a>
+</div>
+
+<!-- Status filter tabs -->
+<div class="filter-tabs mb-4">
+  {% for s, label in [('pending','⏳ Pending'),('active','✅ Approved'),('rejected','❌ Rejected'),('','All')] %}
+    <a href="{{ url_for('admin.applications', status=s, sort=sort) }}"
+       class="filter-tab {% if status_filter == s %}active{% endif %}">
+      {{ label }}
+    </a>
+  {% endfor %}
+</div>
+
+<!-- Sort controls -->
+<div class="mb-3 text-muted" style="font-size:.8rem;">
+  Sort:
+  <a href="{{ url_for('admin.applications', status=status_filter, sort='priority') }}"
+     class="{% if sort == 'priority' %}text-primary{% endif %}">Priority ↓</a>
+  &nbsp;·&nbsp;
+  <a href="{{ url_for('admin.applications', status=status_filter, sort='date') }}"
+     class="{% if sort == 'date' %}text-primary{% endif %}">Date ↓</a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Applicant</th><th>NIN</th><th>LGA</th>
+          <th>Vulnerabilities</th><th>Score</th>
+          <th>NIN Verified</th><th>Submitted</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in apps.items %}
+        <tr>
+          <td>
+            <strong>{{ b.full_name }}</strong>
+            {% if b.applicant %}
+              <br><small class="text-muted">@{{ b.applicant.username }}</small>
+            {% endif %}
+          </td>
+          <td><code>{{ b.masked_nin }}</code></td>
+          <td>{{ b.lga.name if b.lga else '—' }}</td>
+          <td>
+            {% if b.is_unaccompanied_minor %}<span class="badge badge-danger">Minor</span>{% endif %}
+            {% if b.is_disabled %}<span class="badge badge-warning">Disabled</span>{% endif %}
+            {% if b.is_pregnant %}<span class="badge badge-warning">Pregnant</span>{% endif %}
+            {% if b.is_elderly %}<span class="badge badge-warning">Elderly</span>{% endif %}
+            {% if not b.is_elderly and not b.is_disabled and not b.is_pregnant and not b.is_unaccompanied_minor %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if b.priority_score > 0 %}
+              <span class="badge {% if b.priority_score >= 4 %}badge-danger{% elif b.priority_score >= 2 %}badge-warning{% else %}badge-info{% endif %}">
+                {{ b.priority_score }}
+              </span>
+            {% else %}
+              <span class="text-muted">0</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if b.nin_verified %}<span class="badge badge-success">✓</span>
+            {% else %}<span class="badge badge-warning">No</span>{% endif %}
+          </td>
+          <td class="text-muted">{{ b.registered_at.strftime('%d %b %Y') }}</td>
+          <td><span class="badge badge-{{ b.status }}">{{ b.status | title }}</span></td>
+          <td>
+            <a href="{{ url_for('admin.application_detail', b_id=b.id) }}"
+               class="btn btn-sm btn-outline">Review</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center text-muted py-4">
+            No {{ status_filter or '' }} applications found.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if apps.pages > 1 %}
+<div class="pagination mt-3">
+  {% if apps.has_prev %}
+    <a href="{{ url_for('admin.applications', page=apps.prev_num, status=status_filter, sort=sort) }}"
+       class="btn btn-outline">← Prev</a>
+  {% endif %}
+  <span class="page-info">Page {{ apps.page }} of {{ apps.pages }}</span>
+  {% if apps.has_next %}
+    <a href="{{ url_for('admin.applications', page=apps.next_num, status=status_filter, sort=sort) }}"
+       class="btn btn-outline">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

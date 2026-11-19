@@ -88,6 +88,24 @@ def create_app(config_class=None):
         except (ValueError, TypeError):
             return value
 
+    # ── Context processor: inject pending application count into every template ──
+    @app.context_processor
+    def inject_pending_applications():
+        from flask_login import current_user
+        try:
+            if current_user.is_authenticated and current_user.is_admin:
+                from app.models.beneficiary import Beneficiary
+                count = (
+                    Beneficiary.query
+                    .filter_by(status="pending")
+                    .filter(Beneficiary.user_id.isnot(None))
+                    .count()
+                )
+                return {"pending_applications": count}
+        except Exception:
+            pass
+        return {"pending_applications": 0}
+
     # ── Logging (#20) ─────────────────────────────────────────────────
     if not app.debug:
         _setup_logging(app, log_dir)

@@ -27,6 +27,11 @@
     <h3>Audit Trail</h3>
     <p>Full chronological log of all system actions and user activities.</p>
   </a>
+  <a href="{{ url_for('reports.applications_report') }}" class="card report-card">
+    <div class="report-icon">📋</div>
+    <h3>Applications Report</h3>
+    <p>Pending, approved and rejected applications — by state, vulnerability, and approval rate.</p>
+  </a>
   {% endif %}
 </div>
 {% endblock %}

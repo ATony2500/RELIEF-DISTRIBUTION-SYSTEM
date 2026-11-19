@@ -9,3 +9,4 @@ from app.models.distribution import DistributionRecord, DistributionBatch
 from app.models.route import DeliveryRoute, RouteStop
 from app.models.audit import AuditLog
 from app.models.zone import State, LocalGovernmentArea, DistributionPoint
+from app.models.nin_record import NinRecord

@@ -28,6 +28,9 @@ def dashboard():
     total_warehouses = Warehouse.query.filter_by(is_active=True).count()
     active_batches = DistributionBatch.query.filter_by(status="in_progress").count()
     completed_distributions = DistributionRecord.query.filter_by(status="completed").count()
+    pending_applications = Beneficiary.query.filter_by(status="pending").filter(
+        Beneficiary.user_id.isnot(None)
+    ).count()
 
     # #21: database-level low stock filter — no full table scan
     low_stock_items = (
@@ -73,4 +76,5 @@ def dashboard():
         low_stock_items=low_stock_items[:5],
         recent_logs=recent_logs,
         recent_batches=recent_batches,
+        pending_applications=pending_applications,
     )

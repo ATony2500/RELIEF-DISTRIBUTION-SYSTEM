@@ -6,8 +6,7 @@ Improvement #16: Consistent partner role access across all report endpoints.
 
 import csv
 import io
-from datetime import datetime, timezone
-from flask import Blueprint, render_template, request, Response
+from flask import Blueprint, render_template, request
 from flask_login import login_required
 from sqlalchemy import func
 from app import db
@@ -17,7 +16,7 @@ from app.models.inventory import InventoryItem, StockMovement, Warehouse
 from app.models.distribution import DistributionBatch, DistributionRecord
 from app.models.zone import State, LocalGovernmentArea
 from app.utils.decorators import roles_required
-from app.utils.helpers import paginate_query, get_active_warehouses
+from app.utils.helpers import paginate_query, get_active_warehouses, csv_response
 
 reports_bp = Blueprint("reports", __name__)
 
@@ -50,9 +49,8 @@ def beneficiary_summary():
         .all()
     )
 
-    total = Beneficiary.query.filter_by(status="active").count()
+    total    = Beneficiary.query.filter_by(status="active").count()
     verified = Beneficiary.query.filter_by(status="active", nin_verified=True).count()
-    unverified = total - verified
 
     gender_counts = (
         db.session.query(Beneficiary.gender, func.count(Beneficiary.id))
@@ -62,9 +60,9 @@ def beneficiary_summary():
     )
 
     vulnerability = {
-        "disabled": Beneficiary.query.filter_by(status="active", is_disabled=True).count(),
-        "pregnant": Beneficiary.query.filter_by(status="active", is_pregnant=True).count(),
-        "elderly": Beneficiary.query.filter_by(status="active", is_elderly=True).count(),
+        "disabled":     Beneficiary.query.filter_by(status="active", is_disabled=True).count(),
+        "pregnant":     Beneficiary.query.filter_by(status="active", is_pregnant=True).count(),
+        "elderly":      Beneficiary.query.filter_by(status="active", is_elderly=True).count(),
         "unaccompanied": Beneficiary.query.filter_by(
             status="active", is_unaccompanied_minor=True
         ).count(),
@@ -75,7 +73,7 @@ def beneficiary_summary():
         by_state=by_state,
         total=total,
         verified=verified,
-        unverified=unverified,
+        unverified=total - verified,
         gender_counts=gender_counts,
         vulnerability=vulnerability,
     )
@@ -85,7 +83,6 @@ def beneficiary_summary():
 @login_required
 @roles_required(*_REPORT_ROLES)
 def export_beneficiary_summary():
-    """#13: CSV export."""
     rows = (
         db.session.query(State.name, func.count(Beneficiary.id).label("count"))
         .join(LocalGovernmentArea, LocalGovernmentArea.id == Beneficiary.lga_id)
@@ -100,7 +97,7 @@ def export_beneficiary_summary():
     w.writerow(["State", "Active Beneficiaries"])
     for state_name, count in rows:
         w.writerow([state_name, count])
-    return _csv_response(buf, "beneficiary_summary")
+    return csv_response(buf, "beneficiary_summary")
 
 
 # ---------------------------------------------------------------------------
@@ -112,14 +109,13 @@ def export_beneficiary_summary():
 @roles_required(*_REPORT_ROLES)
 def inventory_report():
     warehouses = get_active_warehouses()
-    wh_id = request.args.get("warehouse_id", type=int)
+    wh_id      = request.args.get("warehouse_id", type=int)
     items_query = InventoryItem.query
     if wh_id:
         items_query = items_query.filter_by(warehouse_id=wh_id)
 
     items = items_query.order_by(InventoryItem.category, InventoryItem.item_name).all()
 
-    # Low-stock items — DB-level filter (no full table load)
     low_stock = (
         items_query.filter(
             db.or_(
@@ -150,7 +146,6 @@ def inventory_report():
 @login_required
 @roles_required(*_REPORT_ROLES)
 def export_inventory_report():
-    """#13: CSV export."""
     wh_id = request.args.get("warehouse_id", type=int)
     q = InventoryItem.query
     if wh_id:
@@ -159,7 +154,8 @@ def export_inventory_report():
 
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Warehouse", "Category", "Item", "Unit", "Available", "Threshold", "Status", "Expiry", "Donor"])
+    w.writerow(["Warehouse", "Category", "Item", "Unit", "Available",
+                "Threshold", "Status", "Expiry", "Donor"])
     for item in items:
         w.writerow([
             item.warehouse.code,
@@ -172,7 +168,7 @@ def export_inventory_report():
             item.expiry_date.strftime("%Y-%m-%d") if item.expiry_date else "",
             item.donor or "",
         ])
-    return _csv_response(buf, "inventory_report")
+    return csv_response(buf, "inventory_report")
 
 
 # ---------------------------------------------------------------------------
@@ -191,17 +187,17 @@ def distribution_report():
 
     batch_stats = []
     for b in batches:
-        total = b.records.count()
+        total     = b.records.count()
         completed = b.records.filter_by(status="completed").count()
         batch_stats.append({
-            "batch": b,
-            "total": total,
+            "batch":     b,
+            "total":     total,
             "completed": completed,
-            "rate": round((completed / total * 100) if total else 0, 1),
+            "rate":      round((completed / total * 100) if total else 0, 1),
         })
 
     overall_completed = DistributionRecord.query.filter_by(status="completed").count()
-    overall_total = DistributionRecord.query.count()
+    overall_total     = DistributionRecord.query.count()
 
     return render_template(
         "reports/distribution_report.html",
@@ -215,7 +211,6 @@ def distribution_report():
 @login_required
 @roles_required(*_REPORT_ROLES)
 def export_distribution_report():
-    """#13: CSV export."""
     records = (
         DistributionRecord.query
         .order_by(DistributionRecord.distribution_timestamp.desc())
@@ -241,7 +236,84 @@ def export_distribution_report():
             r.status,
             r.distribution_timestamp.strftime("%Y-%m-%d %H:%M") if r.distribution_timestamp else "",
         ])
-    return _csv_response(buf, "distribution_report")
+    return csv_response(buf, "distribution_report")
+
+
+# ---------------------------------------------------------------------------
+# Applications Report (admin only)
+# ---------------------------------------------------------------------------
+
+@reports_bp.route("/applications-report")
+@login_required
+@roles_required("admin")
+def applications_report():
+    total    = Beneficiary.query.filter(Beneficiary.user_id.isnot(None)).count()
+    pending  = Beneficiary.query.filter_by(status="pending").filter(Beneficiary.user_id.isnot(None)).count()
+    approved = Beneficiary.query.filter_by(status="active").filter(Beneficiary.user_id.isnot(None)).count()
+    rejected = Beneficiary.query.filter_by(status="rejected").filter(Beneficiary.user_id.isnot(None)).count()
+
+    by_state = (
+        db.session.query(State.name, func.count(Beneficiary.id).label("count"))
+        .join(LocalGovernmentArea, LocalGovernmentArea.id == Beneficiary.lga_id)
+        .join(State, State.id == LocalGovernmentArea.state_id)
+        .filter(Beneficiary.user_id.isnot(None))
+        .group_by(State.name)
+        .order_by(func.count(Beneficiary.id).desc())
+        .all()
+    )
+
+    vuln = {
+        "disabled": Beneficiary.query.filter(Beneficiary.user_id.isnot(None), Beneficiary.is_disabled == True).count(),
+        "pregnant": Beneficiary.query.filter(Beneficiary.user_id.isnot(None), Beneficiary.is_pregnant == True).count(),
+        "elderly":  Beneficiary.query.filter(Beneficiary.user_id.isnot(None), Beneficiary.is_elderly == True).count(),
+        "minor":    Beneficiary.query.filter(Beneficiary.user_id.isnot(None), Beneficiary.is_unaccompanied_minor == True).count(),
+    }
+
+    return render_template(
+        "reports/applications_report.html",
+        total=total, pending=pending, approved=approved, rejected=rejected,
+        by_state=by_state, vuln=vuln,
+    )
+
+
+@reports_bp.route("/applications-report/export")
+@login_required
+@roles_required("admin")
+def export_applications_report():
+    apps = (
+        Beneficiary.query
+        .filter(Beneficiary.user_id.isnot(None))
+        .order_by(Beneficiary.registered_at.desc())
+        .all()
+    )
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Full Name", "NIN (Masked)", "Gender", "LGA", "State",
+        "NIN Verified", "Status", "Priority Score",
+        "Disabled", "Pregnant", "Elderly", "Unaccompanied Minor",
+        "Submitted", "Reviewed By", "Reviewed At", "Rejection Reason",
+    ])
+    for b in apps:
+        w.writerow([
+            b.full_name,
+            b.masked_nin,
+            b.gender,
+            b.lga.name if b.lga else "",
+            b.lga.state.name if b.lga else "",
+            "Yes" if b.nin_verified else "No",
+            b.status,
+            b.priority_score,
+            "Yes" if b.is_disabled else "No",
+            "Yes" if b.is_pregnant else "No",
+            "Yes" if b.is_elderly else "No",
+            "Yes" if b.is_unaccompanied_minor else "No",
+            b.registered_at.strftime("%Y-%m-%d %H:%M"),
+            b.reviewer.username if b.reviewer else "",
+            b.reviewed_at.strftime("%Y-%m-%d %H:%M") if b.reviewed_at else "",
+            b.rejection_reason or "",
+        ])
+    return csv_response(buf, "applications_report")
 
 
 # ---------------------------------------------------------------------------
@@ -259,19 +331,3 @@ def audit_summary():
         .paginate(page=page, per_page=30, error_out=False)
     )
     return render_template("reports/audit_summary.html", logs=logs)
-
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
-
-def _csv_response(buf: io.StringIO, filename_stem: str) -> Response:
-    """Return a CSV download response."""
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
-    filename = f"nrds_{filename_stem}_{stamp}.csv"
-    output = buf.getvalue()
-    return Response(
-        output,
-        mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )

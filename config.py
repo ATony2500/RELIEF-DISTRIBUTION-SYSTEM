@@ -53,6 +53,12 @@ class Config:
     # NIN length
     NIN_LENGTH = 11
 
+    # VerifyMe NIN verification API (https://docs.verifyme.ng/)
+    # Set VERIFYME_ENV=live for production, test for sandbox.
+    VERIFYME_API_KEY = os.environ.get("VERIFYME_API_KEY", "")
+    VERIFYME_BASE_URL = "https://vapi.verifyme.ng/v1"
+    VERIFYME_ENV = os.environ.get("VERIFYME_ENV", "test")  # "test" or "live"
+
     # Logging (#20)
     LOG_DIR = os.path.join(BASE_DIR, "logs")
     LOG_MAX_BYTES = 5 * 1024 * 1024   # 5 MB per file

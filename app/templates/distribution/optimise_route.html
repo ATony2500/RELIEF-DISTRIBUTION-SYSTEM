@@ -90,15 +90,3 @@
 </form>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-document.getElementById('stateFilter').addEventListener('change', function() {
-  const val = this.value.toLowerCase();
-  document.querySelectorAll('.point-item').forEach(el => {
-    const state = el.dataset.state.toLowerCase();
-    el.style.display = (!val || state.includes(val)) ? '' : 'none';
-  });
-});
-</script>
-{% endblock %}
-

@@ -1,0 +1,109 @@
+{% extends "auth_base.html" %}
+{% block title %}My Relief Application{% endblock %}
+
+{% block content %}
+<div class="login-card" style="max-width:520px;">
+  <div class="login-logo">
+    <span style="font-size:3rem;">🛡️</span>
+    <h1>NRDS</h1>
+    <p>Beneficiary Portal</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="stat-highlight mb-4">
+    Welcome, <strong>{{ current_user.full_name }}</strong>
+  </div>
+
+  {% if not application %}
+    <div class="alert alert-info mb-4">
+      You have not submitted a relief application yet.
+    </div>
+    <a href="{{ url_for('auth.apply') }}" class="btn btn-primary btn-block btn-lg">
+      📋 Submit Application
+    </a>
+
+  {% elif application.status == 'pending' %}
+    <div class="alert alert-warning">
+      ⏳ Your application is <strong>under review</strong>.
+      You will be notified once a decision is made.
+    </div>
+    <div class="card mt-3">
+      <div class="card-header">
+        <h3>Your Application</h3>
+        <a href="{{ url_for('auth.apply_edit') }}" class="btn btn-sm btn-outline">✏️ Edit</a>
+      </div>
+      <div class="card-body">
+        <dl class="detail-list">
+          <dt>Name</dt><dd>{{ application.full_name }}</dd>
+          <dt>NIN</dt><dd><code>{{ application.masked_nin }}</code></dd>
+          <dt>NIN Verified</dt>
+          <dd>{% if application.nin_verified %}<span class="badge badge-success">Verified</span>
+              {% else %}<span class="badge badge-warning">Unverified</span>{% endif %}</dd>
+          <dt>LGA</dt><dd>{{ application.lga.name if application.lga else '—' }}</dd>
+          <dt>Submitted</dt><dd>{{ application.registered_at.strftime('%d %b %Y') }}</dd>
+          <dt>Status</dt><dd><span class="badge badge-warning">Pending Review</span></dd>
+        </dl>
+      </div>
+    </div>
+
+  {% elif application.status == 'active' %}
+    <div class="alert alert-success">
+      ✅ Your application has been <strong>approved</strong>.
+      You are registered as a beneficiary.
+    </div>
+    <div class="card mt-3">
+      <div class="card-header"><h3>Your Registration</h3></div>
+      <div class="card-body">
+        <dl class="detail-list">
+          <dt>Name</dt><dd>{{ application.full_name }}</dd>
+          <dt>NIN</dt><dd><code>{{ application.masked_nin }}</code></dd>
+          <dt>NIN Verified</dt>
+          <dd>{% if application.nin_verified %}<span class="badge badge-success">Verified</span>
+              {% else %}<span class="badge badge-warning">Unverified</span>{% endif %}</dd>
+          <dt>LGA</dt><dd>{{ application.lga.name if application.lga else '—' }}</dd>
+          <dt>Approved</dt>
+          <dd>{{ application.reviewed_at.strftime('%d %b %Y') if application.reviewed_at else '—' }}</dd>
+          <dt>Status</dt><dd><span class="badge badge-active">Active</span></dd>
+        </dl>
+      </div>
+    </div>
+
+  {% elif application.status == 'rejected' %}
+    <div class="alert alert-danger">
+      ❌ Your application was <strong>not approved</strong>.
+    </div>
+    {% if application.rejection_reason %}
+      <div class="card mt-3">
+        <div class="card-header"><h3>Reason</h3></div>
+        <div class="card-body">
+          <p>{{ application.rejection_reason }}</p>
+          <p class="text-muted mt-2" style="font-size:.85rem;">
+            If you believe this decision was made in error, please contact your
+            local NEMA or SEMA office for assistance.
+          </p>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-muted mt-2" style="font-size:.85rem;">
+        Please contact your local NEMA or SEMA office for more information.
+      </p>
+    {% endif %}
+
+  {% else %}
+    <div class="alert alert-info">
+      Your application status is: <strong>{{ application.status | title }}</strong>
+    </div>
+  {% endif %}
+
+  <p class="login-footer mt-4">
+    <a href="{{ url_for('auth.logout') }}">Sign out</a>
+  </p>
+</div>
+{% endblock %}
