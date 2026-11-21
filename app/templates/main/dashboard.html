@@ -36,6 +36,7 @@
     <a href="{{ url_for('admin.applications', status='pending') }}" class="stat-link">Review now →</a>
   </div>
   {% endif %}
+  <div class="stat-card {% if stats.low_stock_count > 0 %}stat-red{% else %}stat-teal{% endif %}">
     <div class="stat-icon">🏭</div>
     <div class="stat-value">{{ stats.total_warehouses }}</div>
     <div class="stat-label">Active Warehouses
